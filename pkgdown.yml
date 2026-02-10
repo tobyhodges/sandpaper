@@ -1,15 +1,17 @@
-pandoc: 2.7.3
-pkgdown: 2.0.4
+pandoc: 3.1.11
+pkgdown: 2.2.0
 pkgdown_sha: ~
 articles:
-  deployment: deployment.html
-  internationalisation: internationalisation.html
-  landscape: landscape.html
-  toolchain: toolchain.html
   automated-pull-requests: automated-pull-requests.html
   building-with-renv: building-with-renv.html
-last_built: 2022-06-10T18:47Z
+  data-flow: data-flow.html
+  articles/deployment: deployment.html
+  include-child-documents: include-child-documents.html
+  articles/internationalisation: internationalisation.html
+  articles/landscape: landscape.html
+  articles/toolchain: toolchain.html
+  translations: translations.html
+last_built: 2026-02-10T19:57Z
 urls:
   reference: https://carpentries.github.io/sandpaper/reference
   article: https://carpentries.github.io/sandpaper/articles
-
