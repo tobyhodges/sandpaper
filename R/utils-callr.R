@@ -72,3 +72,8 @@ callr_build_episode_md <- function(path, hash, workenv, outpath, workdir, root, 
     encoding = "UTF-8"
   )
 }
+
+# Stub — replaced in Phase 4
+callr_build_episode_qmd <- function(path, outpath, workdir, quiet, error = TRUE) {
+  stop("not yet implemented")
+}

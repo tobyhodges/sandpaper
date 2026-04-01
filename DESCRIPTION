@@ -130,6 +130,7 @@ Suggests:
     sessioninfo,
     mockr,
     pak,
+    quarto,
     varnish (>= 1.0.9)
 Additional_repositories: https://carpentries.r-universe.dev/
 Remotes:

@@ -71,3 +71,15 @@ draft_episode_md <- function(title, make_prefix = FALSE, path = ".", open = rlan
 draft_episode_rmd <- function(title, make_prefix = FALSE, path = ".", open = rlang::is_interactive()) {
   create_episode(title, ext = "Rmd", make_prefix = make_prefix, add = FALSE, path = path, open = open)
 }
+
+#' @export
+#' @rdname create_episode
+create_episode_qmd <- function(title, make_prefix = FALSE, add = TRUE, path = ".", open = rlang::is_interactive()) {
+  stop("not yet implemented")
+}
+
+#' @export
+#' @rdname create_episode
+draft_episode_qmd <- function(title, make_prefix = FALSE, path = ".", open = rlang::is_interactive()) {
+  stop("not yet implemented")
+}
