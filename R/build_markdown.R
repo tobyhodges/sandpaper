@@ -71,7 +71,7 @@ build_markdown <- function(path = ".", rebuild = FALSE, quiet = FALSE, slug = NU
 
   cli::cli_div(theme = sandpaper_cli_theme())
   # Only build if there are markdown sources to be built.
-  needs_building <- fs::path_ext(db$build) %in% c("md", "Rmd")
+  needs_building <- fs::path_ext(db$build) %in% c("md", "Rmd", "qmd")
   if (any(needs_building)) {
     # Render the episode files to the built directory --------------------------
     renv_check_consent(path, quiet, sources, skip_manage_deps)

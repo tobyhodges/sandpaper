@@ -216,6 +216,26 @@ build_episode_md <- function(path, hash = NULL, outdir = path_built(path),
     return(invisible(outpath))
   }
 
+  # Quarto rendering for .qmd files
+  if (file_ext(path) == "qmd") {
+    check_quarto_installed()
+    args <- list(
+      path    = path,
+      outpath = outpath,
+      workdir = workdir,
+      quiet   = quiet,
+      error   = error
+    )
+    sho <- !(quiet || identical(Sys.getenv("TESTTHAT"), "true"))
+    callr::r(
+      func = callr_build_episode_qmd,
+      args = args,
+      show = !quiet,
+      spinner = sho
+    )
+    return(invisible(outpath))
+  }
+
   # Set up the arguments
   root <- root_path(path)
   prof <- fs::path(root, "renv", "profiles", profile)

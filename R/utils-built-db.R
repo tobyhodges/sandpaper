@@ -13,7 +13,7 @@ get_hash <- function(path, db = fs::path(path_built(path), "md5sum.txt")) {
 #' @param filter regex describing files to include.
 #' @keywords internal
 #' @rdname build_status
-get_built_db <- function(db = "site/built/md5sum.txt", filter = "*R?md") {
+get_built_db <- function(db = "site/built/md5sum.txt", filter = "*(R?md|qmd)") {
   opt <- options(stringsAsFactors = FALSE)
   on.exit(options(opt), add = TRUE)
   if (!file.exists(db)) {
@@ -65,7 +65,7 @@ reserved_db <- function(db) {
   reserved <- c("index", "README", "CONTRIBUTING", "learners/setup",
     "profiles[/].*", "instructors[/]instructor-notes[.]*", "links")
   reserved <- paste(reserved, collapse = "|")
-  reserved <- paste0("^(", reserved, ")[.]R?md")
+  reserved <- paste0("^(", reserved, ")[.](R?md|qmd)")
   db[!grepl(reserved, db$file, perl = TRUE), , drop = FALSE]
 }
 
@@ -300,14 +300,14 @@ build_status <- function(sources, db = "site/built/md5sum.txt", rebuild = FALSE,
   # built files are flattened here
   built <- fs::path(built_path, fs::path_file(sources))
   built <- ifelse(
-    fs::path_ext(built) %in% c("Rmd", "rmd"),
+    fs::path_ext(built) %in% c("Rmd", "rmd", "qmd"),
     fs::path_ext_set(built, "md"), built
   )
   date <- format(Sys.Date(), "%F")
   # calculate checksums -------------------------------------------------------
   checksums <- tools::md5sum(fs::path(root_path, sources))
   # if there are any RMD documents, we check for child documents
-  is_rmd <- tolower(fs::path_ext(sources)) == "rmd"
+  is_rmd <- tolower(fs::path_ext(sources)) %in% c("rmd", "qmd")
   if (any(is_rmd)) {
     children <- get_lineages(this_lesson(root_path))
   } else {

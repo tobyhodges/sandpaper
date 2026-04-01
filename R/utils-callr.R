@@ -73,7 +73,20 @@ callr_build_episode_md <- function(path, hash, workenv, outpath, workdir, root, 
   )
 }
 
-# Stub — replaced in Phase 4
 callr_build_episode_qmd <- function(path, outpath, workdir, quiet, error = TRUE) {
-  stop("not yet implemented")
+  file_path_sans_ext <- function(x) {
+    sub("([^.]+)\\.[[:alnum:]]+$", "\\1", x)
+  }
+  slug <- file_path_sans_ext(basename(outpath))
+
+  wd <- getwd()
+  on.exit(setwd(wd), add = TRUE)
+  setwd(workdir)
+
+  quarto::quarto_render(
+    input = path,
+    output_format = "md",
+    output_file = outpath,
+    quiet = quiet
+  )
 }
