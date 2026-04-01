@@ -3,6 +3,8 @@
     Code
       update_github_workflows(tmp)
     Message
+      i Using GitHub token for authenticated API request.
+      i Downloading workflows from https://api.github.com/repos/carpentries/workbench-workflows/releases/latest
       i Workflows/files updated:
       - '.github/workflows/deleteme.yaml' (deleted)
 
@@ -11,6 +13,8 @@
     Code
       update_github_workflows(tmp)
     Message
+      [36mi[39m Using GitHub token for authenticated API request.
+      [36mi[39m Downloading workflows from https://api.github.com/repos/carpentries/workbench-workflows/releases/latest
       [36mi[39m Workflows/files updated:
       - [34m.github/workflows/deleteme.yaml[39m [3m(deleted)[23m
 
@@ -19,6 +23,8 @@
     Code
       update_github_workflows(tmp)
     Message
+      ℹ Using GitHub token for authenticated API request.
+      ℹ Downloading workflows from https://api.github.com/repos/carpentries/workbench-workflows/releases/latest
       ℹ Workflows/files updated:
       - '.github/workflows/deleteme.yaml' (deleted)
 
@@ -27,6 +33,8 @@
     Code
       update_github_workflows(tmp)
     Message
+      [36mℹ[39m Using GitHub token for authenticated API request.
+      [36mℹ[39m Downloading workflows from https://api.github.com/repos/carpentries/workbench-workflows/releases/latest
       [36mℹ[39m Workflows/files updated:
       - [34m.github/workflows/deleteme.yaml[39m [3m(deleted)[23m
 
@@ -35,14 +43,17 @@
     Code
       update_github_workflows(tmp)
     Message
+      i Using GitHub token for authenticated API request.
+      i Downloading workflows from https://api.github.com/repos/carpentries/workbench-workflows/releases/latest
       i Workflows/files updated:
-      - '.github/workflows/sandpaper-version.txt' (modified)
+      - '.github/workflows/workflows-version.txt' (modified)
 
 # nothing happens when the versions are aligned
 
     Code
       update_github_workflows(tmp, overwrite = FALSE)
     Message
+      i Using GitHub token for authenticated API request.
       i Workflows up-to-date!
 
 ---
@@ -50,5 +61,7 @@
     Code
       update_github_workflows(tmp)
     Message
+      i Using GitHub token for authenticated API request.
+      i Downloading workflows from https://api.github.com/repos/carpentries/workbench-workflows/releases/latest
       i Workflows up-to-date!
 

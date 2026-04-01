@@ -1,9 +1,11 @@
+#nocov start
+
 #' Update github workflows
 #'
-#' This function copies and updates the workflows to run `{sandpaper}`. 
+#' This function copies and updates the workflows to run `{sandpaper}`.
 #'
 #' @param path path to the current lesson.
-#' @param files the files to include in the update. Defaults to an empty string, 
+#' @param files the files to include in the update. Defaults to an empty string,
 #'   which will update all files
 #' @param overwrite if `TRUE` (default), the file(s) will be overwritten.
 #' @param clean glob of files to be cleaned before writing. Defaults to
@@ -13,36 +15,59 @@
 #'   do not want to clean, set this to `NULL`.
 #' @param quiet if `TRUE`, the process will not output any messages, default is
 #'   `FALSE`, which will report on the progress of each step.
-#' @return the paths to the new files. 
+#' @param branch if specified, the branch from which to pull the workflows.
+#' @return the paths to the new files.
 #' @export
-update_github_workflows <- function(path = ".", files = "", overwrite = TRUE, clean = "*.yaml", quiet = FALSE) {
+update_github_workflows <- function(path = ".", files = "", overwrite = TRUE, clean = "*.yaml", quiet = FALSE, branch = "") {
 
   wf <- fs::path(path, ".github", "workflows")
-  version_file <- fs::path(wf, "sandpaper-version.txt")
-  this_version <- package_version(utils::packageDescription("sandpaper")$Version)
+
+  # get latest version info from github carpentries/workbench-workflows releases list
+  version_file <- fs::path(wf, "workflows-version.txt")
+  release_info <- fetch_latest_workflows_release_info(branch=branch, quiet = quiet)
+  latest_version <- release_info$latest_version
+  releases_url <- release_info$releases_url
+  body <- release_info$body
+  zip_url <- release_info$zip_url
 
   need_dir <- !fs::dir_exists(wf)
   if (need_dir) {
     fs::dir_create(wf, recurse = TRUE)
   }
   if (fs::file_exists(version_file)) {
-    oldvers <- package_version(readLines(version_file))
+    # if version is not semver, set to 0.0.0 to force update
+    oldvers <- tryCatch(
+      package_version(readLines(version_file)),
+      error = function(e) package_version("0.0.0")
+    )
   } else {
     oldvers <- package_version("0.0.0")
   }
 
-  if (overwrite || oldvers < this_version) {
+  if (overwrite || branch != "" || oldvers < latest_version) {
     if (files == "" && !is.null(clean)) {
       fs::file_delete(fs::dir_ls(wf, glob = clean))
+
+      # if sandpaper-version.txt file exists, delete it
+      sandpaper_version_file <- fs::path(wf, "sandpaper-version.txt")
+      if (fs::file_exists(sandpaper_version_file)) {
+        fs::file_delete(sandpaper_version_file)
+      }
     }
-    # we update the files
-    our_files <- system.file("workflows", files, package = "sandpaper")
-    if (length(our_files) == 1L && fs::is_dir(our_files)) {
-      our_files <- fs::dir_ls(our_files)
+
+    if (!quiet) {
+      cli::cli_alert_info("Downloading workflows from {releases_url}")
     }
-    new_files <- character(length(our_files))
-    names(new_files) <- our_files
-    for (file in our_files) {
+    temp_zip <- fs::file_temp(ext = ".zip")
+    httr::GET(zip_url, httr::write_disk(temp_zip, overwrite = TRUE))
+    temp_dir <- fs::dir_create(fs::file_temp())
+    utils::unzip(temp_zip, exdir = temp_dir)
+    latest_files <- fs::dir_ls(temp_dir, recurse = TRUE, glob = "*workflows/*")
+
+    our_files <- fs::dir_ls(wf)
+    new_files <- character(length(latest_files))
+    names(new_files) <- latest_files
+    for (file in latest_files) {
       is_present <- fs::file_exists(fs::path(wf, fs::path_file(file)))
       if (!is_present || overwrite) {
         new_files[file] <- fs::file_copy(file, wf, overwrite = overwrite)
@@ -51,7 +76,7 @@ update_github_workflows <- function(path = ".", files = "", overwrite = TRUE, cl
   } else {
     new_files <- character(0)
   }
-  writeLines(as.character(this_version), con = version_file)
+  writeLines(as.character(latest_version), con = version_file)
   if (!quiet) {
     thm <- cli::cli_div(theme = sandpaper_cli_theme())
     if (length(new_files) && !all(new_files == "")) {
@@ -72,5 +97,54 @@ update_github_workflows <- function(path = ".", files = "", overwrite = TRUE, cl
   }
   return(invisible(new_files[new_files != ""]))
 }
+#nocov end
 
+fetch_latest_workflows_release_info <- function(branch = "", quiet = FALSE) {
+  if (branch != "") {
+    releases_url <- paste0("https://api.github.com/repos/carpentries/workbench-workflows/branches/", branch)
+    releases_json <- auth_get(releases_url, quiet = quiet)
+    latest_version_sha <- releases_json$commit$sha
+    body <- ""
+    latest_version <- strtrim(latest_version_sha, 6)
+    zip_url <- paste0("https://github.com/carpentries/workbench-workflows/archive/refs/heads/", branch, ".zip")
+  } else {
+    releases_url <- "https://api.github.com/repos/carpentries/workbench-workflows/releases/latest"
+    releases_json <- auth_get(releases_url, quiet = quiet)
+    latest_version_tag <- releases_json$tag_name
+    body <- releases_json$body
+    latest_version <- package_version(gsub("^v", "", latest_version_tag))
+    zip_url <- releases_json$zipball_url
+  }
+  return(list(
+    latest_version = latest_version,
+    releases_url = releases_url,
+    zip_url = zip_url,
+    body = body
+  ))
+}
 
+auth_get <- function(api_url, quiet = FALSE) {
+  token <- NULL
+  if (nzchar(Sys.getenv("GITHUB_PAT"))) {
+    token <- Sys.getenv("GITHUB_PAT")
+  } else if (nzchar(Sys.getenv("GITHUB_TOKEN"))) {
+    token <- Sys.getenv("GITHUB_TOKEN")
+  }
+
+  if (is.null(token)) {
+    if (!quiet) {
+      cli::cli_alert_warning("No GitHub token available. API rate limits may apply.")
+    }
+    return(jsonlite::fromJSON(api_url))
+  } else {
+    if (!quiet) {
+      cli::cli_alert_info("Using GitHub token for authenticated API request.")
+    }
+    req <-httr::GET(
+      api_url,
+      httr::add_headers(Authorization = paste("token", token))
+    )
+    httr::stop_for_status(req)
+    return(jsonlite::fromJSON(httr::content(req, as = "text", encoding = "UTF-8")))
+  }
+}

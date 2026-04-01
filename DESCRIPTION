@@ -1,6 +1,6 @@
 Package: sandpaper
 Title: Create and Curate Carpentries Lessons
-Version: 0.18.5
+Version: 0.20.1.9000
 Authors@R: c(
     person(given = "Robert",
            family = "Davey",
@@ -78,6 +78,11 @@ Authors@R: c(
            role = c("ctb"),
            email = "matthew.feickert@cern.ch",
            comment = c(ORCID = "0000-0003-4124-7862")),
+    person(given = "Dimitrios",
+           family = "Theodorakis",
+           role = c("ctb"),
+           email = "astrodimitrios@gmail.com",
+           comment = c(ORCID = "0000-0001-9288-1332")),
     person())
 Description: We provide tools to build a Carpentries-themed lesson repository
   into an accessible standalone static website. These include local tools and
@@ -124,7 +129,8 @@ Suggests:
     jsonlite,
     sessioninfo,
     mockr,
-    varnish (>= 1.0.7)
+    pak,
+    varnish (>= 1.0.9)
 Additional_repositories: https://carpentries.r-universe.dev/
 Remotes:
   carpentries/pegboard,
