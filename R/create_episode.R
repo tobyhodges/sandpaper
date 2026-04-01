@@ -7,7 +7,9 @@
 #' @param title the title of the episode
 #' @param ext a character. If `ext = "Rmd"` (default), then the new episode will
 #'   be an R Markdown episode. If `ext = "md"`, then the new episode will be
-#'   a markdown episode, which can not generate dynamic content.
+#'   a markdown episode, which can not generate dynamic content. If
+#'   `ext = "qmd"`, then the new episode will be a Quarto document, which can
+#'   render code in multiple languages (Python, R, Julia, etc.).
 #' @param make_prefix a logical. When `TRUE`, the prefix for the file will be
 #'   automatically determined by the files already present. When `FALSE`
 #'   (default), it assumes no prefix is needed.
@@ -24,9 +26,10 @@
 create_episode <- function(title, ext = "Rmd", make_prefix = FALSE, add = TRUE, path = ".",
                            open = rlang::is_interactive()) {
   check_lesson(path)
-  ext <- switch(match.arg(tolower(ext), c("rmd", "md")),
+  ext <- switch(match.arg(tolower(ext), c("rmd", "md", "qmd")),
     rmd = ".Rmd",
-    md = ".md"
+    md = ".md",
+    qmd = ".qmd"
   )
   prefix <- ""
   if (make_prefix) {
@@ -38,7 +41,7 @@ create_episode <- function(title, ext = "Rmd", make_prefix = FALSE, add = TRUE, 
   slug <- slugify(title)
   ename <- paste0(prefix, slug, ext)
   copy_template("episode", fs::path(path, "episodes"), ename,
-    values = list(title = siQuote(title), md = ext == ".md")
+    values = list(title = siQuote(title), md = ext == ".md", qmd = ext == ".qmd")
   )
   if (add) {
     move_episode(ename, position = add, write = TRUE, path = path)
@@ -75,11 +78,11 @@ draft_episode_rmd <- function(title, make_prefix = FALSE, path = ".", open = rla
 #' @export
 #' @rdname create_episode
 create_episode_qmd <- function(title, make_prefix = FALSE, add = TRUE, path = ".", open = rlang::is_interactive()) {
-  stop("not yet implemented")
+  create_episode(title, ext = "qmd", make_prefix = make_prefix, add = add, path = path, open = open)
 }
 
 #' @export
 #' @rdname create_episode
 draft_episode_qmd <- function(title, make_prefix = FALSE, path = ".", open = rlang::is_interactive()) {
-  stop("not yet implemented")
+  create_episode(title, ext = "qmd", make_prefix = make_prefix, add = FALSE, path = path, open = open)
 }

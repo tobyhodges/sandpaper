@@ -74,18 +74,33 @@ You can add a line with at least three colons and a `solution` tag.
 
 ## Figures
 
-{{^md}}
+{{^md}}{{^qmd}}
 You can include figures generated from R Markdown:
 
 ```{r pyramid, fig.alt = "pie chart illusion of a pyramid", fig.cap = "Sun arise each and every morning"}
 pie(
-  c(Sky = 78, "Sunny side of pyramid" = 17, "Shady side of pyramid" = 5), 
-  init.angle = 315, 
-  col = c("deepskyblue", "yellow", "yellow3"), 
+  c(Sky = 78, "Sunny side of pyramid" = 17, "Shady side of pyramid" = 5),
+  init.angle = 315,
+  col = c("deepskyblue", "yellow", "yellow3"),
   border = FALSE
 )
 ```
-Or you{{/md}}{{#md}}You{{/md}} can use pandoc markdown for static figures with the following syntax:
+Or you{{/qmd}}{{/md}}{{#qmd}}
+You can include figures generated from code:
+
+```{python}
+#| label: fig-example
+#| fig-cap: "Sun arise each and every morning"
+#| fig-alt: "pie chart illusion of a pyramid"
+import matplotlib.pyplot as plt
+
+sizes = [78, 17, 5]
+labels = ['Sky', 'Sunny side of pyramid', 'Shady side of pyramid']
+colors = ['deepskyblue', 'yellow', 'gold']
+plt.pie(sizes, labels=labels, colors=colors, startangle=315)
+plt.show()
+```
+Or you{{/qmd}}{{#md}}You{{/md}} can use pandoc markdown for static figures with the following syntax:
 
 `![optional caption that appears below the figure](figure url){alt='alt text for
 accessibility purposes'}`
@@ -104,7 +119,8 @@ Cool, right?
 ::::::::::::::::::::::::::::::::::::: keypoints 
 
 - Use `.md` files for episodes when you want static content
-- Use `.Rmd` files for episodes when you need to generate output
+- Use `.Rmd` files for episodes when you need to generate R output
+- Use `.qmd` files for episodes when you need to generate output from Python, R, Julia, or other languages
 - Run `sandpaper::check_lesson()` to identify any issues with your lesson
 - Run `sandpaper::build_lesson()` to preview your lesson locally
 
