@@ -8,7 +8,7 @@
 \usage{
 get_hash(path, db = fs::path(path_built(path), "md5sum.txt"))
 
-get_built_db(db = "site/built/md5sum.txt", filter = "*R?md")
+get_built_db(db = "site/built/md5sum.txt", filter = "*(R?md|qmd)")
 
 build_status(
   sources,

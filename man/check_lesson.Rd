@@ -2,7 +2,7 @@
 % Please edit documentation in R/check_lesson.R
 \name{check_lesson}
 \alias{check_lesson}
-\title{\link{deprecated} Check the lesson structure for errors}
+\title{\link[rprojroot:deprecated]{rprojroot::deprecated} Check the lesson structure for errors}
 \usage{
 check_lesson(path = ".", quiet = TRUE)
 }

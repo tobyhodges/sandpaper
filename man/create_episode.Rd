@@ -6,6 +6,8 @@
 \alias{create_episode_rmd}
 \alias{draft_episode_md}
 \alias{draft_episode_rmd}
+\alias{create_episode_qmd}
+\alias{draft_episode_qmd}
 \title{Create an Episode from a template}
 \usage{
 create_episode(
@@ -46,13 +48,30 @@ draft_episode_rmd(
   path = ".",
   open = rlang::is_interactive()
 )
+
+create_episode_qmd(
+  title,
+  make_prefix = FALSE,
+  add = TRUE,
+  path = ".",
+  open = rlang::is_interactive()
+)
+
+draft_episode_qmd(
+  title,
+  make_prefix = FALSE,
+  path = ".",
+  open = rlang::is_interactive()
+)
 }
 \arguments{
 \item{title}{the title of the episode}
 
 \item{ext}{a character. If \code{ext = "Rmd"} (default), then the new episode will
 be an R Markdown episode. If \code{ext = "md"}, then the new episode will be
-a markdown episode, which can not generate dynamic content.}
+a markdown episode, which can not generate dynamic content. If
+\code{ext = "qmd"}, then the new episode will be a Quarto document, which can
+render code in multiple languages (Python, R, Julia, etc.).}
 
 \item{make_prefix}{a logical. When \code{TRUE}, the prefix for the file will be
 automatically determined by the files already present. When \code{FALSE}
