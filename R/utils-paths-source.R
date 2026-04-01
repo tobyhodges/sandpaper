@@ -102,7 +102,7 @@ get_resource_list <- function(path, trim = FALSE, subfolder = NULL, warn = FALSE
 
   res <- fs::dir_ls(
     root_path,
-    regexp = "*[.](R?md|lock|yaml)$",
+    regexp = "*[.](R?md|qmd|lock|yaml)$",
     recurse = recurse, # only move into the source folders
     type = "file",
     fail = FALSE
@@ -152,12 +152,12 @@ get_resource_list <- function(path, trim = FALSE, subfolder = NULL, warn = FALSE
 
 get_sources <- function(path, subfolder = "episodes") {
   pe <- enforce_dir(fs::path(root_path(path), subfolder))
-  fs::path_abs(fs::dir_ls(pe, regexp = "*R?md"))
+  fs::path_abs(fs::dir_ls(pe, regexp = "*(R?md|qmd)"))
 }
 
 get_source_artifacts <- function(path, subfolder = "episodes") {
   pe <- enforce_dir(fs::path(root_path(path), subfolder))
-  fs::dir_ls(pe, regexp = "*R?md",
+  fs::dir_ls(pe, regexp = "*(R?md|qmd)",
     invert = TRUE,
     type = "file",
     all = TRUE

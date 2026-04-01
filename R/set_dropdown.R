@@ -34,7 +34,7 @@ set_dropdown <- function(path = ".", order = NULL, write = FALSE, folder) {
   real_files <- fs::path_file(fs::dir_ls(
     fs::path(path, folder),
     type = "file",
-    regexp = "[.]R?md"
+    regexp = "[.](R?md|qmd)"
   ))
   if (any(!order %in% real_files)) {
     error_missing_config(order, real_files, folder)

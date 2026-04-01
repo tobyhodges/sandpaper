@@ -30,7 +30,7 @@ create_episode <- function(title, ext = "Rmd", make_prefix = FALSE, add = TRUE, 
   )
   prefix <- ""
   if (make_prefix) {
-    episodes <- fs::path_file(fs::dir_ls(path_episodes(path), regexp = "*.[Rr]?md"))
+    episodes <- fs::path_file(fs::dir_ls(path_episodes(path), regexp = "*.[Rr]?md|*.qmd"))
     suppressWarnings(prefix <- as.integer(sub("^([0-9]{2}).+$", "\\1", episodes)))
     no_prefix <- length(prefix) == 0 || all(is.na(prefix))
     prefix <- if (no_prefix) "01-" else sprintf("%02d-", max(prefix, na.rm = TRUE) + 1L)

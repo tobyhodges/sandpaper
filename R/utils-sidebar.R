@@ -27,10 +27,10 @@ page_location <- function(i, abs_md, er) {
 #' @rdname create_sidebar
 create_resources_dropdown <- function(files, type = "learners") {
   if (type == "learners") {
-    files <- files[!grepl("setup[.]R?md$", fs::path_file(files))]
+    files <- files[!grepl("setup[.](R?md|qmd)$", fs::path_file(files))]
   }
   if (type == "instructors") {
-    files <- files[!grepl("instructor-notes[.]R?md$", fs::path_file(files))]
+    files <- files[!grepl("instructor-notes[.](R?md|qmd)$", fs::path_file(files))]
   }
   out <- list(extras = NULL, resources = NULL)
   # NOTE: this creates a vector of length two: the first one has links with the
