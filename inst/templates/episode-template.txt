@@ -86,9 +86,17 @@ pie(
 )
 ```
 Or you{{/qmd}}{{/md}}{{#qmd}}
-You can include figures generated from code:
+You can include code that generates output:
 
 ```{python}
+greeting = "Hello from Quarto!"
+print(greeting)
+```
+
+You can also include figures generated from code. For example, if you add
+`matplotlib` to your `environment.yml`, you could use a code block like this:
+
+```python
 #| label: fig-example
 #| fig-cap: "Sun arise each and every morning"
 #| fig-alt: "pie chart illusion of a pyramid"
@@ -100,7 +108,8 @@ colors = ['deepskyblue', 'yellow', 'gold']
 plt.pie(sizes, labels=labels, colors=colors, startangle=315)
 plt.show()
 ```
-Or you{{/qmd}}{{#md}}You{{/md}} can use pandoc markdown for static figures with the following syntax:
+
+You{{/qmd}}{{#md}}You{{/md}} can use pandoc markdown for static figures with the following syntax:
 
 `![optional caption that appears below the figure](figure url){alt='alt text for
 accessibility purposes'}`

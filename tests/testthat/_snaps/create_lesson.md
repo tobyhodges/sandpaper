@@ -25,6 +25,8 @@
       .Renviron
       docs/
       po/*~
+      .quarto/
+      .conda/
 
 # Destruction of the .gitignore file renders the lesson incorrect [ansi]
 
@@ -53,6 +55,8 @@
       .Renviron
       docs/
       po/*~
+      .quarto/
+      .conda/
 
 # Destruction of the .gitignore file renders the lesson incorrect [unicode]
 
@@ -81,6 +85,8 @@
       .Renviron
       docs/
       po/*~
+      .quarto/
+      .conda/
 
 # Destruction of the .gitignore file renders the lesson incorrect [fancy]
 
@@ -109,4 +115,6 @@
       .Renviron
       docs/
       po/*~
+      .quarto/
+      .conda/
 

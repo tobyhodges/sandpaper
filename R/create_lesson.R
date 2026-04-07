@@ -5,10 +5,15 @@
 #'
 #' @param path the path to the new lesson folder
 #' @param name the name of the lesson. If not provided, the folder name will be used.
-#' @param rmd logical indicator if the lesson should use R Markdown (`TRUE`,
-#'   default), or if it should use Markdown (`FALSE`). Note that lessons can be
-#'   converted to use R Markdown at any time by adding a file with the `.Rmd`
-#'   file extension in the lesson.
+#' @param format character string indicating the source format for episodes.
+#'   One of `"Rmd"` (default), `"md"`, or `"qmd"`. `"Rmd"` creates an
+#'   R Markdown lesson with renv for dependency management. `"md"` creates a
+#'   plain Markdown lesson with no code execution. `"qmd"` creates a Quarto
+#'   lesson with an `environment.yml` for dependency management.
+#' @param rmd \[deprecated\] logical indicator if the lesson should use
+#'   R Markdown (`TRUE`) or Markdown (`FALSE`). Superseded by the `format`
+#'   parameter and will be phased out in the future. If `format` is explicitly
+#'   provided, `rmd` is ignored.
 #' @param rstudio create an RStudio project (defaults to if RStudio exits)
 #' @param open if interactive, the lesson will open in a new editor window.
 #'
@@ -19,7 +24,21 @@
 #' on.exit(unlink(tmp))
 #' lsn <- create_lesson(tmp, name = "This Lesson", open = FALSE)
 #' lsn
-create_lesson <- function(path, name = fs::path_file(path), rmd = TRUE, rstudio = rstudioapi::isAvailable(), open = rlang::is_interactive()) {
+create_lesson <- function(path, name = fs::path_file(path), format = NULL, rmd = TRUE, rstudio = rstudioapi::isAvailable(), open = rlang::is_interactive()) {
+
+  # Resolve format vs deprecated rmd parameter
+  if (!is.null(format)) {
+    format <- match.arg(format, c("Rmd", "md", "qmd"))
+    if (!missing(rmd)) {
+      cli::cli_warn(c(
+        "Both {.arg format} and {.arg rmd} were provided.",
+        "i" = "{.arg rmd} is deprecated; using {.code format = \"{format}\"}."
+      ))
+    }
+  } else {
+    # No explicit format — fall back to rmd for backwards compatibility
+    format <- if (rmd) "Rmd" else "md"
+  }
 
   path <- fs::path_abs(path)
   id <- cli::cli_status("{cli::symbol$arrow_right} Creating Lesson in {.file {path}}...")
@@ -76,7 +95,7 @@ create_lesson <- function(path, name = fs::path_file(path), rmd = TRUE, rstudio 
   create_site(path)
 
   cli::cli_status_update("{cli::symbol$arrow_right} Creating first episode ...")
-  ep <- create_episode("introduction", ext = if (rmd) "Rmd" else "md", path = path, open = FALSE)
+  ep <- create_episode("introduction", ext = format, path = path, open = FALSE)
   cli::cli_alert_success("First episode created in {.file {ep}}")
 
   if (rstudio) {
@@ -89,10 +108,12 @@ create_lesson <- function(path, name = fs::path_file(path), rmd = TRUE, rstudio 
   cli::cli_status_update("{cli::symbol$arrow_right} Inserting GitHub workflows ...")
   update_github_workflows(path)
 
-  has_consent <- rmd && getOption("sandpaper.use_renv")
-  if (has_consent) {
-    cli::cli_status_update("{cli::symbol$arrow_right} Managing Dependencies ...")
+  if (format == "Rmd" && getOption("sandpaper.use_renv")) {
+    cli::cli_status_update("{cli::symbol$arrow_right} Managing R Dependencies ...")
     manage_deps(path, snapshot = TRUE)
+  } else if (format == "qmd") {
+    cli::cli_status_update("{cli::symbol$arrow_right} Creating {.file environment.yml} ...")
+    copy_template("environment", path, "environment.yml")
   }
 
   cli::cli_status_update("{cli::symbol$arrow_right} Committing ...")

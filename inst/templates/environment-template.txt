@@ -1,0 +1,4 @@
+name: lesson
+dependencies:
+  - python>=3.11
+  - jupyter
