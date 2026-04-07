@@ -220,18 +220,23 @@ build_episode_md <- function(path, hash = NULL, outdir = path_built(path),
   if (file_ext(path) == "qmd") {
     check_quarto_installed()
     args <- list(
-      path    = path,
-      outpath = outpath,
-      workdir = workdir,
-      quiet   = quiet,
-      error   = error
+      path       = path,
+      outpath    = outpath,
+      workdir    = workdir,
+      lua_filter = template_quarto_filter(),
+      quiet      = quiet,
+      error      = error
     )
     sho <- !(quiet || identical(Sys.getenv("TESTTHAT"), "true"))
+    # If a conda environment exists, point Quarto at its Python
+    python_path <- setup_quarto_env(root_path(path), quiet = quiet)
+    env <- if (!is.null(python_path)) c("QUARTO_PYTHON" = python_path) else character()
     callr::r(
       func = callr_build_episode_qmd,
       args = args,
       show = !quiet,
-      spinner = sho
+      spinner = sho,
+      env = c(callr::rcmd_safe_env(), env)
     )
     return(invisible(outpath))
   }

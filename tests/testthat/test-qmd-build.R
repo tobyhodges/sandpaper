@@ -28,20 +28,20 @@ test_that("reserved_db() filters .qmd files correctly", {
 })
 
 test_that("build_markdown() includes .qmd in needs_building", {
+  skip_if_not(nzchar(Sys.which("quarto")), "Quarto CLI not installed")
   tmp <- restore_fixture()
   withr::defer(clear_globals())
   qmd_path <- fs::path(tmp, "episodes", "quarto-test.qmd")
   writeLines(
-    "---\ntitle: 'Quarto Episode'\nteaching: 10\nexercises: 2\n---\n\nHello from Quarto\n",
+    "---\ntitle: 'Quarto Episode'\nteaching: 10\nexercises: 2\n---\n\n::::::::::::::::::::::::::::::::::::: questions\n\n- A question?\n\n::::::::::::::::::::::::::::::::::::::::::::::::\n\n::::::::::::::::::::::::::::::::::::: objectives\n\n- An objective\n\n::::::::::::::::::::::::::::::::::::::::::::::::\n\nHello from Quarto\n\n::::::::::::::::::::::::::::::::::::: keypoints\n\n- A keypoint\n\n::::::::::::::::::::::::::::::::::::::::::::::::\n",
     qmd_path
   )
-  set_episodes(tmp, order = c("introduction.md", "quarto-test.qmd"), write = TRUE)
-  # build_markdown should attempt to build the .qmd file
-  # (will fail at quarto rendering if quarto not installed, but should get that far)
-  expect_error(
-    build_markdown(tmp, quiet = TRUE),
-    "quarto|not yet implemented"
-  )
+  set_episodes(tmp, order = c("introduction.Rmd", "quarto-test.qmd"), write = TRUE)
+  # build_markdown should successfully build the .qmd file
+  expect_no_error(build_markdown(tmp, quiet = TRUE))
+  # The built .md file should exist
+  built_md <- fs::path(tmp, "site", "built", "quarto-test.md")
+  expect_true(fs::file_exists(built_md))
 })
 
 test_that("build_episode_md() routes .qmd to quarto rendering", {
@@ -71,6 +71,8 @@ test_that("no_renv_needed is TRUE for .qmd-only lessons", {
     fs::path(tmp, "episodes", "quarto-test.qmd")
   )
   set_episodes(tmp, order = "quarto-test.qmd", write = TRUE)
+  # Clear cached resource list so get_build_sources re-reads from disk
+  sandpaper:::.resources$clear()
   sources <- sandpaper:::get_build_sources(tmp, fs::path(tmp, "site", "built"), NULL, TRUE)
   no_renv_needed <- !any(fs::path_ext(sources) %in% c("Rmd", "rmd"))
   expect_true(no_renv_needed)

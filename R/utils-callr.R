@@ -73,7 +73,8 @@ callr_build_episode_md <- function(path, hash, workenv, outpath, workdir, root, 
   )
 }
 
-callr_build_episode_qmd <- function(path, outpath, workdir, quiet, error = TRUE) {
+callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet,
+                                    error = TRUE) {
   file_path_sans_ext <- function(x) {
     sub("([^.]+)\\.[[:alnum:]]+$", "\\1", x)
   }
@@ -83,10 +84,52 @@ callr_build_episode_qmd <- function(path, outpath, workdir, quiet, error = TRUE)
   on.exit(setwd(wd), add = TRUE)
   setwd(workdir)
 
+  # Use gfm+fenced_divs to preserve Carpentries div structure, plus a Lua
+  # filter to undo Quarto's proof/solution transformation.
+  pandoc_args <- if (!is.null(lua_filter)) c("--lua-filter", lua_filter) else NULL
   quarto::quarto_render(
     input = path,
-    output_format = "md",
-    output_file = outpath,
-    quiet = quiet
+    output_format = "gfm+fenced_divs",
+    output_file = paste0(slug, ".md"),
+    execute_dir = workdir,
+    quiet = quiet,
+    pandoc_args = pandoc_args
   )
+
+  # Post-process the rendered markdown to match what sandpaper expects.
+  rendered <- file.path(dirname(path), paste0(slug, ".md"))
+  lines <- readLines(rendered, encoding = "UTF-8")
+
+  # ::: {.questions} -> ::: questions
+  lines <- gsub("^(:{3,})\\s*\\{\\.([-a-zA-Z0-9]+)\\}\\s*$", "\\1 \\2", lines)
+  # \[text\]\[ref\] -> [text][ref]
+  lines <- gsub("\\\\\\[(.+?)\\\\\\]\\\\\\[(.+?)\\\\\\]", "[\\1][\\2]", lines)
+
+  # Move generated figures to fig/ with sandpaper naming convention, and
+  # rewrite image paths in the markdown to match.
+  fig_dir <- file.path(dirname(path), paste0(slug, "_files"))
+  out_fig_dir <- file.path(dirname(outpath), "fig")
+  if (dir.exists(fig_dir)) {
+    if (!dir.exists(out_fig_dir)) dir.create(out_fig_dir, recursive = TRUE)
+    fig_files <- list.files(fig_dir, recursive = TRUE, full.names = TRUE)
+    for (fig in fig_files) {
+      new_name <- paste0(slug, "-rendered-", basename(fig))
+      new_path <- file.path(out_fig_dir, new_name)
+      file.copy(fig, new_path, overwrite = TRUE)
+      # Rewrite paths in the markdown (handles both markdown and HTML img tags)
+      old_ref <- file.path(paste0(slug, "_files"),
+        sub(paste0("^.*", slug, "_files/"), "", fig))
+      lines <- gsub(old_ref, file.path("fig", new_name), lines, fixed = TRUE)
+    }
+    # Clean up the Quarto-generated figure directory
+    unlink(fig_dir, recursive = TRUE)
+  }
+
+  writeLines(lines, rendered)
+
+  # Move the rendered .md to the expected output location
+  if (rendered != outpath) {
+    file.copy(rendered, outpath, overwrite = TRUE)
+    file.remove(rendered)
+  }
 }

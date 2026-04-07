@@ -1,0 +1,17 @@
+-- Restore solution divs that Quarto transforms into proof environments.
+-- Quarto's built-in filters treat "solution" as a theorem-like environment,
+-- converting ::: solution to ::: {.proof .solution} with a proof-title span.
+-- This filter undoes that transformation so sandpaper can process the divs.
+function Div(el)
+  if el.classes:includes("proof") and el.classes:includes("solution") then
+    el.classes = pandoc.List({"solution"})
+    el.content = el.content:walk({
+      Span = function(span)
+        if span.classes:includes("proof-title") then
+          return {}
+        end
+      end
+    })
+    return el
+  end
+end
