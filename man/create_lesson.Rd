@@ -7,6 +7,7 @@
 create_lesson(
   path,
   name = fs::path_file(path),
+  format = NULL,
   rmd = TRUE,
   rstudio = rstudioapi::isAvailable(),
   open = rlang::is_interactive()
@@ -17,10 +18,16 @@ create_lesson(
 
 \item{name}{the name of the lesson. If not provided, the folder name will be used.}
 
-\item{rmd}{logical indicator if the lesson should use R Markdown (\code{TRUE},
-default), or if it should use Markdown (\code{FALSE}). Note that lessons can be
-converted to use R Markdown at any time by adding a file with the \code{.Rmd}
-file extension in the lesson.}
+\item{format}{character string indicating the source format for episodes.
+One of \code{"Rmd"} (default), \code{"md"}, or \code{"qmd"}. \code{"Rmd"} creates an
+R Markdown lesson with renv for dependency management. \code{"md"} creates a
+plain Markdown lesson with no code execution. \code{"qmd"} creates a Quarto
+lesson with an \code{environment.yml} for dependency management.}
+
+\item{rmd}{[deprecated] logical indicator if the lesson should use
+R Markdown (\code{TRUE}) or Markdown (\code{FALSE}). Superseded by the \code{format}
+parameter and will be phased out in the future. If \code{format} is explicitly
+provided, \code{rmd} is ignored.}
 
 \item{rstudio}{create an RStudio project (defaults to if RStudio exits)}
 
