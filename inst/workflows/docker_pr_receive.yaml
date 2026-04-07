@@ -118,11 +118,29 @@ jobs:
           CACHE_VERSION: ${{ inputs.CACHE_VERSION || '' }}
           skip-cache-check: true
 
+  check-conda:
+    name: "Check If We Need Conda"
+    runs-on: ubuntu-latest
+    outputs:
+      conda-needed: ${{ steps.conda-check.outputs.conda-needed }}
+      conda-cache-hashsum: ${{ steps.conda-check.outputs.conda-cache-hashsum }}
+    steps:
+      - name: "Checkout Lesson"
+        uses: actions/checkout@v4
+
+      - name: "Is conda required?"
+        id: conda-check
+        uses: carpentries/actions/conda-checks@main
+        with:
+          CACHE_VERSION: ${{ inputs.CACHE_VERSION || '' }}
+          skip-cache-check: true
+
   build-md-source:
     name: "Build markdown source files if valid"
     needs:
       - test-pr
       - check-renv
+      - check-conda
     runs-on: ubuntu-latest
     if: needs.test-pr.outputs.is_valid == 'true'
     env:
@@ -227,6 +245,70 @@ jobs:
           key: ${{ github.repository }}/${{ steps.wb-vers.outputs.container-version }}_renv-${{ needs.check-renv.outputs.renv-cache-hashsum }}
           restore-keys:
             ${{ github.repository }}/${{ steps.wb-vers.outputs.container-version }}_renv-
+
+      - name: Get Container Version for Conda
+        id: wb-vers-conda
+        if: needs.check-conda.outputs.conda-needed == 'true'
+        uses: carpentries/actions/container-version@main
+        with:
+          WORKBENCH_TAG: ${{ vars.WORKBENCH_TAG }}
+          renv-needed: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Validate Org for Conda Cache"
+        id: validate-org-conda
+        if: needs.check-conda.outputs.conda-needed == 'true'
+        uses: carpentries/actions/validate-org-workflow@main
+        with:
+          repo: ${{ github.repository }}
+          workflow: ${{ github.workflow }}
+
+      - name: Configure AWS credentials for Conda
+        id: aws-creds-conda
+        env:
+          role-to-assume: ${{ secrets.AWS_GH_OIDC_ARN }}
+          aws-region: ${{ secrets.AWS_GH_OIDC_REGION }}
+        if: |
+          steps.validate-org-conda.outputs.is_valid == 'true' &&
+          needs.check-conda.outputs.conda-needed == 'true' &&
+          env.role-to-assume != '' &&
+          env.aws-region != ''
+        uses: aws-actions/configure-aws-credentials@v5.0.0
+        with:
+          role-to-assume: ${{ env.role-to-assume }}
+          aws-region: ${{ env.aws-region }}
+          output-credentials: true
+
+      - name: Get conda cache from S3
+        id: s3-conda-cache
+        uses: carpentries/actions-cache/restore@frog-matchedkey-1
+        if: needs.check-conda.outputs.conda-needed == 'true'
+        with:
+          accessKey: ${{ steps.aws-creds-conda.outputs.aws-access-key-id }}
+          secretKey: ${{ steps.aws-creds-conda.outputs.aws-secret-access-key }}
+          sessionToken: ${{ steps.aws-creds-conda.outputs.aws-session-token }}
+          bucket: workbench-docker-caches
+          path: |
+            /home/rstudio/lesson/.conda
+          key: ${{ github.repository }}/${{ steps.wb-vers-conda.outputs.container-version }}_conda-${{ needs.check-conda.outputs.conda-cache-hashsum }}
+          restore-keys:
+            ${{ github.repository }}/${{ steps.wb-vers-conda.outputs.container-version }}_conda-
+
+      - name: "Set up Conda Environment"
+        if: |
+          needs.check-conda.outputs.conda-needed == 'true' &&
+          steps.s3-conda-cache.outputs.cache-hit != 'true'
+        run: |
+          # 📦 Creating conda environment from environment.yml #
+          LESSON_PATH="/home/rstudio/lesson"
+          conda env create -p "${LESSON_PATH}/.conda" -f "${LESSON_PATH}/environment.yml" --yes --quiet
+        shell: bash
+
+      - name: "Set QUARTO_PYTHON"
+        if: needs.check-conda.outputs.conda-needed == 'true'
+        run: |
+          echo "QUARTO_PYTHON=/home/rstudio/lesson/.conda/bin/python" >> $GITHUB_ENV
+        shell: bash
 
       - name: "Fortify renv Cache"
         if: |

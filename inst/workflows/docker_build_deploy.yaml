@@ -132,7 +132,7 @@ jobs:
         uses: carpentries/actions/build-and-deploy@main
         with:
           reset: ${{ vars.BUILD_RESET || github.event.inputs.reset || 'false' }}
-          skip-manage-deps: ${{ github.event.inputs.force-skip-manage-deps == 'true' || steps.build-container-deps.outputs.renv-cache-available || steps.build-container-deps.outputs.backup-cache-used || 'false' }}
+          skip-manage-deps: ${{ github.event.inputs.force-skip-manage-deps == 'true' || steps.build-container-deps.outputs.renv-cache-available || steps.build-container-deps.outputs.backup-cache-used || steps.build-container-deps.outputs.conda-cache-available || 'false' }}
           lang-code: ${{ vars.LANG_CODE || '' }}
 
   update-container-version:
