@@ -109,6 +109,58 @@ plt.pie(sizes, labels=labels, colors=colors, startangle=315)
 plt.show()
 ```
 
+### Inline expressions
+
+You can use inline Python expressions to insert computed values into
+text. For example, the greeting above was: `{python} greeting`.
+
+### Callouts
+
+Quarto callout blocks are automatically mapped to Carpentries callout
+styles:
+
+::: {.callout-note}
+## A note
+Use `.callout-note` or `.callout-tip` for informational notes.
+:::
+
+::: {.callout-warning}
+## A warning
+Use `.callout-warning`, `.callout-caution`, or `.callout-important` for
+warnings and cautions.
+:::
+
+### Tabsets
+
+Use Quarto's tabset syntax to create tabbed content panels:
+
+::: {.panel-tabset}
+
+#### Python
+```python
+greeting = "Hello!"
+print(greeting)
+```
+
+#### R
+```r
+greeting <- "Hello!"
+print(greeting)
+```
+
+:::
+
+### Diagrams
+
+You can include [Mermaid](https://mermaid.js.org/) diagrams:
+
+```mermaid
+graph LR
+  A[Start] --> B{Choose}
+  B --> C[Option 1]
+  B --> D[Option 2]
+```
+
 You{{/qmd}}{{#md}}You{{/md}} can use pandoc markdown for static figures with the following syntax:
 
 `![optional caption that appears below the figure](figure url){alt='alt text for

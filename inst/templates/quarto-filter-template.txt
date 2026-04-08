@@ -1,8 +1,13 @@
--- Restore solution divs that Quarto transforms into proof environments.
--- Quarto's built-in filters treat "solution" as a theorem-like environment,
--- converting ::: solution to ::: {.proof .solution} with a proof-title span.
--- This filter undoes that transformation so sandpaper can process the divs.
+-- Lua filter to adapt Quarto output for the Carpentries Workbench.
+--
+-- 1. Restore solution divs that Quarto transforms into proof environments.
+-- 2. Map Quarto callout divs to Carpentries callout/caution divs.
+-- 3. Map Quarto panel-tabset divs to Carpentries tab divs.
+
 function Div(el)
+  -- Restore solution divs from proof environments.
+  -- Quarto's built-in filters treat "solution" as a theorem-like environment,
+  -- converting ::: solution to ::: {.proof .solution} with a proof-title span.
   if el.classes:includes("proof") and el.classes:includes("solution") then
     el.classes = pandoc.List({"solution"})
     el.content = el.content:walk({
@@ -12,6 +17,45 @@ function Div(el)
         end
       end
     })
+    return el
+  end
+
+  -- Map Quarto callouts to Carpentries divs.
+  -- .callout-note and .callout-tip -> .callout
+  -- .callout-warning, .callout-caution, .callout-important -> .caution
+  local callout_map = {
+    ["callout-note"]      = "callout",
+    ["callout-tip"]       = "callout",
+    ["callout-warning"]   = "caution",
+    ["callout-caution"]   = "caution",
+    ["callout-important"] = "caution",
+  }
+
+  for qclass, cclass in pairs(callout_map) do
+    if el.classes:includes(qclass) then
+      -- Extract the title from the callout header if present
+      local title = nil
+      local content = pandoc.List({})
+      for _, block in ipairs(el.content) do
+        if block.t == "Header" then
+          title = pandoc.utils.stringify(block)
+        else
+          content:insert(block)
+        end
+      end
+      -- If there's a title, prepend it as a header
+      if title then
+        content:insert(1, pandoc.Header(3, pandoc.Str(title)))
+      end
+      el.classes = pandoc.List({cclass})
+      el.content = content
+      return el
+    end
+  end
+
+  -- Map Quarto panel-tabset to Carpentries tab divs.
+  if el.classes:includes("panel-tabset") then
+    el.classes = pandoc.List({"tab"})
     return el
   end
 end
