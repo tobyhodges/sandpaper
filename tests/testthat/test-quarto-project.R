@@ -140,23 +140,24 @@ test_that("is_sandpaper_quarto_yml() returns FALSE when file is missing", {
 test_that("with_quarto_project() writes file when none exists and cleans up", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
-  yml <- fs::path(tmp, "_quarto.yml")
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
   if (fs::file_exists(yml)) fs::file_delete(yml)
 
-  observed_during <- FALSE
+  state <- new.env()
+  state$observed_during <- FALSE
   sandpaper:::with_quarto_project(tmp, {
-    observed_during <<- fs::file_exists(yml) &&
+    state$observed_during <- fs::file_exists(yml) &&
       sandpaper:::is_sandpaper_quarto_yml(yml)
   }, quiet = TRUE)
 
-  expect_true(observed_during)
+  expect_true(state$observed_during)
   expect_false(fs::file_exists(yml))
 })
 
 test_that("with_quarto_project() returns the value of expr", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
-  yml <- fs::path(tmp, "_quarto.yml")
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
   if (fs::file_exists(yml)) fs::file_delete(yml)
 
   result <- sandpaper:::with_quarto_project(tmp, 42L, quiet = TRUE)
@@ -166,7 +167,7 @@ test_that("with_quarto_project() returns the value of expr", {
 test_that("with_quarto_project() cleans up on error", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
-  yml <- fs::path(tmp, "_quarto.yml")
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
   if (fs::file_exists(yml)) fs::file_delete(yml)
 
   expect_error(
@@ -179,7 +180,7 @@ test_that("with_quarto_project() cleans up on error", {
 test_that("with_quarto_project() respects and restores an existing user file", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
-  yml <- fs::path(tmp, "_quarto.yml")
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
   user_contents <- c("project:", "  type: website", "bibliography: refs.bib")
   writeLines(user_contents, yml)
 
@@ -196,22 +197,23 @@ test_that("with_quarto_project() respects and restores an existing user file", {
 test_that("with_quarto_project() merged file includes user keys when shinylive requested", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
-  yml <- fs::path(tmp, "_quarto.yml")
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
   writeLines(c("project:", "  type: website", "bibliography: refs.bib"), yml)
 
-  merged_during <- NULL
+  state <- new.env()
+  state$merged_during <- character()
   sandpaper:::with_quarto_project(tmp, {
-    merged_during <<- readLines(yml)
+    state$merged_during <- readLines(yml)
   }, shinylive = TRUE, quiet = TRUE)
 
-  expect_true(any(grepl("bibliography: refs.bib", merged_during)))
-  expect_true(any(grepl("shinylive", merged_during)))
+  expect_true(any(grepl("bibliography: refs.bib", state$merged_during)))
+  expect_true(any(grepl("shinylive", state$merged_during)))
 })
 
 test_that("with_quarto_project() logs info when merging existing user file", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
-  yml <- fs::path(tmp, "_quarto.yml")
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
   writeLines(c("project:", "  type: website"), yml)
 
   expect_message(
@@ -223,7 +225,7 @@ test_that("with_quarto_project() logs info when merging existing user file", {
 test_that("with_quarto_project() treats orphaned sandpaper file as absent", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
-  yml <- fs::path(tmp, "_quarto.yml")
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
   # Simulate a leftover file from a crashed build
   writeLines(
     c(sandpaper:::sandpaper_sentinel, "project:", "  type: website"),

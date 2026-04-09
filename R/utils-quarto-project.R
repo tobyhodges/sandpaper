@@ -83,6 +83,68 @@ is_sandpaper_quarto_yml <- function(yml_path) {
   length(first) >= 1L && identical(first, sandpaper_sentinel)
 }
 
+# Merge the sandpaper-required keys into a user-authored `_quarto.yml`,
+# returning a character vector of lines for the merged document. The
+# returned content starts with the sandpaper sentinel so the merged file
+# is distinguishable from both the user's original and from plain sandpaper
+# builds. Adds only missing keys; never clobbers user values.
+#
+# @param user_lines character vector, contents of the user's `_quarto.yml`
+# @param shinylive logical, whether to ensure `shinylive` is in `filters`
+# @param engine NULL or a string, forced `engine` key if not set by user
+# @param quiet if TRUE, suppress the "added keys" warning
+# @return a character vector of lines suitable for `writeLines()`
+# @keywords internal
+merge_quarto_yaml <- function(user_lines, shinylive = FALSE, engine = NULL,
+                              quiet = FALSE) {
+  user_content <- paste(user_lines, collapse = "\n")
+  user_data <- tryCatch(
+    yaml::yaml.load(user_content, eval.expr = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(user_data) || !is.list(user_data)) user_data <- list()
+
+  added <- character()
+
+  # Ensure project.type = website (required by the shinylive filter and a
+  # safe default for any Workbench-managed Quarto project)
+  if (is.null(user_data$project)) {
+    user_data$project <- list(type = "website")
+    added <- c(added, "project.type")
+  } else if (is.null(user_data$project$type)) {
+    user_data$project$type <- "website"
+    added <- c(added, "project.type")
+  }
+
+  if (isTRUE(shinylive)) {
+    existing_filters <- user_data$filters
+    if (is.null(existing_filters)) existing_filters <- list()
+    flat <- unlist(existing_filters)
+    if (!"shinylive" %in% flat) {
+      user_data$filters <- c(as.list(flat), list("shinylive"))
+      added <- c(added, "filters[shinylive]")
+    }
+  }
+
+  if (!is.null(engine) && nzchar(engine) && is.null(user_data$engine)) {
+    user_data$engine <- engine
+    added <- c(added, paste0("engine=", engine))
+  }
+
+  if (!quiet && length(added)) {
+    cli::cli_alert_warning(
+      "Added {length(added)} key{?s} not present in {.file _quarto.yml}: {.val {added}}"
+    )
+  }
+
+  serialized <- yaml::as.yaml(user_data)
+  c(
+    sandpaper_sentinel,
+    "# Merged from user _quarto.yml; original restored on build completion.",
+    strsplit(serialized, "\n", fixed = TRUE)[[1]]
+  )
+}
+
 # Run `expr` with a transient `_quarto.yml` present at the lesson root.
 #
 # Behavior:
@@ -103,5 +165,45 @@ is_sandpaper_quarto_yml <- function(yml_path) {
 # @keywords internal
 with_quarto_project <- function(path, expr, shinylive = FALSE, engine = NULL,
                                 quiet = FALSE) {
-  stop("with_quarto_project() not yet implemented")
+  root <- root_path(path)
+  yml <- fs::path(root, "_quarto.yml")
+
+  has_user_file <- fs::file_exists(yml) && !is_sandpaper_quarto_yml(yml)
+  backup <- NULL
+
+  if (has_user_file) {
+    if (!quiet) {
+      cli::cli_alert_info(
+        "Merging sandpaper Quarto project config into existing {.file _quarto.yml}"
+      )
+    }
+    backup <- fs::file_temp(pattern = "sandpaper-quarto-yml-", ext = "yml")
+    fs::file_copy(yml, backup, overwrite = TRUE)
+    user_lines <- readLines(yml, warn = FALSE)
+    merged <- merge_quarto_yaml(user_lines, shinylive = shinylive,
+      engine = engine, quiet = quiet)
+    writeLines(merged, yml)
+  } else {
+    # No user file, or an orphaned sandpaper file from a crashed build:
+    # overwrite with freshly generated content.
+    writeLines(
+      build_quarto_project_yaml(shinylive = shinylive, engine = engine),
+      yml
+    )
+  }
+
+  on.exit({
+    if (is.null(backup)) {
+      if (fs::file_exists(yml)) {
+        tryCatch(fs::file_delete(yml), error = function(e) NULL)
+      }
+    } else {
+      tryCatch({
+        fs::file_copy(backup, yml, overwrite = TRUE)
+        fs::file_delete(backup)
+      }, error = function(e) NULL)
+    }
+  }, add = TRUE)
+
+  force(expr)
 }
