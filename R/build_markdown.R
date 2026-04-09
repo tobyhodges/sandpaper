@@ -87,14 +87,27 @@ build_markdown <- function(path = ".", rebuild = FALSE, quiet = FALSE, slug = NU
       cli::cli_alert_info("{.code fail_on_error: true}. Use {.code error=TRUE} in code chunks for demonstrative errors")
     }
 
-    for (i in seq_along(build_me)) {
-      build_episode_md(
-        path    = build_me[i],
-        outdir  = outdir,
-        workdir = outdir,
-        quiet   = quiet,
-        error   = error
-      )
+    build_the_episodes <- function() {
+      for (i in seq_along(build_me)) {
+        build_episode_md(
+          path    = build_me[i],
+          outdir  = outdir,
+          workdir = outdir,
+          quiet   = quiet,
+          error   = error
+        )
+      }
+    }
+    # Quarto requires a `_quarto.yml` at the project root for several of its
+    # features (extensions, filters, project-level metadata). When the build
+    # includes any .qmd source, wrap the build loop in a transient project
+    # file that is removed on completion. Shinylive-specific keys are added
+    # in a later step.
+    has_qmd <- any(fs::path_ext(build_me) == "qmd")
+    if (has_qmd) {
+      with_quarto_project(path, build_the_episodes(), quiet = quiet)
+    } else {
+      build_the_episodes()
     }
 
     handout <- this_metadata$get()[["handout"]]

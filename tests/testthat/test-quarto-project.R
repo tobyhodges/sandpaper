@@ -3,9 +3,9 @@
 
 # ---- build_quarto_project_yaml() -------------------------------------------
 
-test_that("build_quarto_project_yaml() generates a minimal website project", {
+test_that("build_quarto_project_yaml() generates a minimal default project", {
   yml <- sandpaper:::build_quarto_project_yaml()
-  expect_match(yml, "project:\\s*\\n\\s*type: website")
+  expect_match(yml, "project:\\s*\\n\\s*type: default")
   expect_match(yml, "sandpaper-managed")
   expect_false(grepl("filters:", yml))
   expect_false(grepl("engine:", yml))
@@ -236,4 +236,93 @@ test_that("with_quarto_project() treats orphaned sandpaper file as absent", {
 
   # Orphan file should be removed on exit
   expect_false(fs::file_exists(yml))
+})
+
+# ---- build_markdown() integration ------------------------------------------
+
+test_that("build_markdown() creates and removes transient _quarto.yml for .qmd builds", {
+  skip_if_not(nzchar(Sys.which("quarto")), "Quarto CLI not installed")
+  tmp <- restore_fixture()
+  withr::defer(clear_globals())
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
+  if (fs::file_exists(yml)) fs::file_delete(yml)
+
+  # Add a .qmd episode with no executable content so jupyter/knitr are not
+  # required for the build.
+  qmd <- fs::path(tmp, "episodes", "qproject.qmd")
+  writeLines(c(
+    "---", "title: 'Project Test'", "teaching: 1", "exercises: 1",
+    "engine: markdown", "---",
+    "",
+    "::::::::::::::::::::::::::::::::::::: questions", "- Q?",
+    "::::::::::::::::::::::::::::::::::::::::::::::::",
+    "",
+    "::::::::::::::::::::::::::::::::::::: objectives", "- O",
+    "::::::::::::::::::::::::::::::::::::::::::::::::",
+    "",
+    "Hello from a .qmd file.",
+    "",
+    "::::::::::::::::::::::::::::::::::::: keypoints", "- K",
+    "::::::::::::::::::::::::::::::::::::::::::::::::"
+  ), qmd)
+  set_episodes(tmp, order = c("introduction.Rmd", "qproject.qmd"), write = TRUE)
+
+  expect_no_error(build_markdown(tmp, quiet = TRUE))
+
+  # Transient file should have been removed on completion
+  expect_false(fs::file_exists(yml))
+})
+
+test_that("build_markdown() does not create a transient file for .md-only lessons", {
+  tmp <- restore_fixture()
+  withr::defer(clear_globals())
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
+  if (fs::file_exists(yml)) fs::file_delete(yml)
+
+  # Replace the Rmd introduction with an md version so no Rmd/qmd is present
+  rmd <- fs::path(tmp, "episodes", "introduction.Rmd")
+  md  <- fs::path(tmp, "episodes", "introduction.md")
+  if (fs::file_exists(rmd)) {
+    txt <- readLines(rmd)
+    writeLines(txt, md)
+    fs::file_delete(rmd)
+  }
+  sandpaper:::.resources$clear()
+  set_episodes(tmp, order = "introduction.md", write = TRUE)
+
+  expect_no_error(build_markdown(tmp, quiet = TRUE))
+  expect_false(fs::file_exists(yml))
+})
+
+test_that("build_markdown() restores an existing user _quarto.yml after .qmd build", {
+  skip_if_not(nzchar(Sys.which("quarto")), "Quarto CLI not installed")
+  tmp <- restore_fixture()
+  withr::defer(clear_globals())
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
+  user_contents <- c("project:", "  type: default", "toc: true")
+  writeLines(user_contents, yml)
+
+  qmd <- fs::path(tmp, "episodes", "qproject.qmd")
+  writeLines(c(
+    "---", "title: 'Project Test'", "teaching: 1", "exercises: 1",
+    "engine: markdown", "---",
+    "",
+    "::::::::::::::::::::::::::::::::::::: questions", "- Q?",
+    "::::::::::::::::::::::::::::::::::::::::::::::::",
+    "",
+    "::::::::::::::::::::::::::::::::::::: objectives", "- O",
+    "::::::::::::::::::::::::::::::::::::::::::::::::",
+    "",
+    "Hello.",
+    "",
+    "::::::::::::::::::::::::::::::::::::: keypoints", "- K",
+    "::::::::::::::::::::::::::::::::::::::::::::::::"
+  ), qmd)
+  set_episodes(tmp, order = c("introduction.Rmd", "qproject.qmd"), write = TRUE)
+
+  expect_no_error(build_markdown(tmp, quiet = TRUE))
+
+  # User's file is restored verbatim
+  expect_true(fs::file_exists(yml))
+  expect_identical(readLines(yml), user_contents)
 })

@@ -58,7 +58,7 @@ build_quarto_project_yaml <- function(shinylive = FALSE, engine = NULL) {
     "# This file is written at the start of every build and removed on",
     "# completion. Edits will be lost.",
     "project:",
-    "  type: website"
+    "  type: default"
   )
   if (isTRUE(shinylive)) {
     lines <- c(lines, "filters:", "  - shinylive")
@@ -106,13 +106,16 @@ merge_quarto_yaml <- function(user_lines, shinylive = FALSE, engine = NULL,
 
   added <- character()
 
-  # Ensure project.type = website (required by the shinylive filter and a
-  # safe default for any Workbench-managed Quarto project)
+  # Ensure project.type is set (required for shinylive to detect a Quarto
+  # project). `default` is used rather than `website` to preserve in-place
+  # rendering of .md outputs; `website` would redirect output to `_site/`
+  # which breaks sandpaper's expectation that the built .md lives next to
+  # its source.
   if (is.null(user_data$project)) {
-    user_data$project <- list(type = "website")
+    user_data$project <- list(type = "default")
     added <- c(added, "project.type")
   } else if (is.null(user_data$project$type)) {
-    user_data$project$type <- "website"
+    user_data$project$type <- "default"
     added <- c(added, "project.type")
   }
 
@@ -137,7 +140,16 @@ merge_quarto_yaml <- function(user_lines, shinylive = FALSE, engine = NULL,
     )
   }
 
-  serialized <- yaml::as.yaml(user_data)
+  # Quarto uses YAML 1.2 (strict `true`/`false` booleans) while R's yaml
+  # package defaults to YAML 1.1 output (`yes`/`no`). Override the logical
+  # handler so merged files parse under Quarto.
+  serialized <- yaml::as.yaml(user_data, handlers = list(
+    logical = function(x) {
+      v <- if (isTRUE(x)) "true" else "false"
+      class(v) <- "verbatim"
+      v
+    }
+  ))
   c(
     sandpaper_sentinel,
     "# Merged from user _quarto.yml; original restored on build completion.",
