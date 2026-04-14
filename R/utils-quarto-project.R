@@ -15,9 +15,14 @@ sandpaper_sentinel <- "# sandpaper-managed transient Quarto project file (do not
 # `_quarto.yml`. Pure function — no filesystem side effects.
 #
 # @param engine NULL or a string, e.g. "knitr" to force the engine
+# @param execute_error NULL or a logical. When non-NULL, emit
+#   `execute.error: true/false` to control whether Quarto halts on a
+#   code cell error (TRUE = capture errors and continue, FALSE = halt).
+#   This mirrors knitr's `error` option for `.Rmd` lessons so `.qmd`
+#   lessons inherit sandpaper's `fail_on_error` config uniformly.
 # @return a single character string, the YAML document
 # @keywords internal
-build_quarto_project_yaml <- function(engine = NULL) {
+build_quarto_project_yaml <- function(engine = NULL, execute_error = NULL) {
   lines <- c(
     sandpaper_sentinel,
     "# This file is written at the start of every build and removed on",
@@ -27,6 +32,10 @@ build_quarto_project_yaml <- function(engine = NULL) {
   )
   if (!is.null(engine) && nzchar(engine)) {
     lines <- c(lines, paste0("engine: ", engine))
+  }
+  if (!is.null(execute_error)) {
+    lines <- c(lines, "execute:",
+      paste0("  error: ", if (isTRUE(execute_error)) "true" else "false"))
   }
   paste(lines, collapse = "\n")
 }
@@ -83,10 +92,15 @@ is_sandpaper_quarto_yml <- function(yml_path) {
 #
 # @param user_lines character vector, contents of the user's `_quarto.yml`
 # @param engine NULL or a string, forced `engine` key if not set by user
+# @param execute_error NULL or a logical. When non-NULL and the user
+#   has not already set `execute.error`, adds it. Never clobbers an
+#   existing user value — author frontmatter / project-level
+#   intentional overrides win.
 # @param quiet if TRUE, suppress the "added keys" warning
 # @return a character vector of lines suitable for `writeLines()`
 # @keywords internal
-merge_quarto_yaml <- function(user_lines, engine = NULL, quiet = FALSE) {
+merge_quarto_yaml <- function(user_lines, engine = NULL, execute_error = NULL,
+                              quiet = FALSE) {
   user_content <- paste(user_lines, collapse = "\n")
   user_data <- tryCatch(
     yaml::yaml.load(user_content, eval.expr = FALSE),
@@ -110,6 +124,16 @@ merge_quarto_yaml <- function(user_lines, engine = NULL, quiet = FALSE) {
   if (!is.null(engine) && nzchar(engine) && is.null(user_data$engine)) {
     user_data$engine <- engine
     added <- c(added, "engine")
+  }
+
+  if (!is.null(execute_error)) {
+    if (is.null(user_data$execute)) {
+      user_data$execute <- list(error = isTRUE(execute_error))
+      added <- c(added, "execute.error")
+    } else if (is.null(user_data$execute$error)) {
+      user_data$execute$error <- isTRUE(execute_error)
+      added <- c(added, "execute.error")
+    }
   }
 
   if (!quiet && length(added)) {
@@ -149,10 +173,15 @@ merge_quarto_yaml <- function(user_lines, engine = NULL, quiet = FALSE) {
 # @param path path to the lesson root
 # @param expr an expression to evaluate while the transient file is present
 # @param engine NULL or a string to force the engine
+# @param execute_error NULL or a logical propagated to
+#   `build_quarto_project_yaml()` / `merge_quarto_yaml()` to control
+#   whether Quarto halts on cell errors. Mirrors knitr's `error`
+#   option from sandpaper's `fail_on_error` config.
 # @param quiet if TRUE, suppress info messages
 # @return the value of `expr`
 # @keywords internal
-with_quarto_project <- function(path, expr, engine = NULL, quiet = FALSE) {
+with_quarto_project <- function(path, expr, engine = NULL,
+                                execute_error = NULL, quiet = FALSE) {
   root <- root_path(path)
   yml <- fs::path(root, "_quarto.yml")
 
@@ -170,12 +199,16 @@ with_quarto_project <- function(path, expr, engine = NULL, quiet = FALSE) {
     }
     backup <- fs::file_temp(pattern = "sandpaper-quarto-yml-", ext = "yml")
     fs::file_copy(yml, backup, overwrite = TRUE)
-    merged <- merge_quarto_yaml(user_lines, engine = engine, quiet = quiet)
+    merged <- merge_quarto_yaml(user_lines, engine = engine,
+      execute_error = execute_error, quiet = quiet)
     writeLines(merged, yml)
   } else {
     # No user file, or an orphaned sandpaper file from a crashed build:
     # overwrite with freshly generated content.
-    writeLines(build_quarto_project_yaml(engine = engine), yml)
+    writeLines(
+      build_quarto_project_yaml(engine = engine, execute_error = execute_error),
+      yml
+    )
   }
 
   on.exit({

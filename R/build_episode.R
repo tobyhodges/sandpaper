@@ -173,6 +173,9 @@ get_nav_data <- function(path_md, path_src = NULL, home = NULL,
 #' @param error if `TRUE` (default) errors do not make an invalid build.
 #'   This can be set to false to cause the build to fail if an error occurs.
 #'   This is generally controlled via the `fail_on_error` config option.
+#'   For `.qmd` episodes this flag has no effect at the per-episode level —
+#'   `fail_on_error` is applied project-wide via `execute.error` in the
+#'   transient `_quarto.yml` written by [with_quarto_project()].
 #' @return the path to the output, invisibly
 #' @keywords internal
 #' @export
@@ -224,8 +227,7 @@ build_episode_md <- function(path, hash = NULL, outdir = path_built(path),
       outpath    = outpath,
       workdir    = workdir,
       lua_filter = template_quarto_filter(),
-      quiet      = quiet,
-      error      = error
+      quiet      = quiet
     )
     sho <- !(quiet || identical(Sys.getenv("TESTTHAT"), "true"))
     # If a conda environment exists, point Quarto at its Python

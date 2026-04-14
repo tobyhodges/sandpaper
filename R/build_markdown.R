@@ -106,7 +106,12 @@ build_markdown <- function(path = ".", rebuild = FALSE, quiet = FALSE, slug = NU
     # on completion).
     has_qmd <- any(fs::path_ext(build_me) == "qmd")
     if (has_qmd) {
-      with_quarto_project(path, build_the_episodes(), quiet = quiet)
+      # `error` here carries knitr's permissive-on-error semantics;
+      # Quarto's `execute.error` uses the same boolean meaning, so the
+      # value passes through unchanged and .qmd episodes inherit
+      # sandpaper's `fail_on_error` config without per-document setup.
+      with_quarto_project(path, build_the_episodes(),
+        execute_error = error, quiet = quiet)
     } else {
       build_the_episodes()
     }

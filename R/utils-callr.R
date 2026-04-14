@@ -73,8 +73,12 @@ callr_build_episode_md <- function(path, hash, workenv, outpath, workdir, root, 
   )
 }
 
-callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet,
-                                    error = TRUE) {
+callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet) {
+  # Error-handling semantics (sandpaper's `fail_on_error` config) are
+  # applied at the project level via `execute.error` in the transient
+  # `_quarto.yml` written by with_quarto_project(), so this function
+  # does not need a per-episode `error` argument the way the .Rmd path
+  # does for knitr::opts_chunk$set(error=).
   file_path_sans_ext <- function(x) {
     sub("([^.]+)\\.[[:alnum:]]+$", "\\1", x)
   }

@@ -16,6 +16,17 @@ test_that("build_quarto_project_yaml() sets engine when requested", {
   expect_match(yml, "engine: knitr")
 })
 
+test_that("build_quarto_project_yaml() emits execute.error when requested", {
+  yml_permissive <- sandpaper:::build_quarto_project_yaml(execute_error = TRUE)
+  expect_match(yml_permissive, "execute:\\s*\\n\\s*error: true")
+
+  yml_strict <- sandpaper:::build_quarto_project_yaml(execute_error = FALSE)
+  expect_match(yml_strict, "execute:\\s*\\n\\s*error: false")
+
+  yml_unset <- sandpaper:::build_quarto_project_yaml()
+  expect_false(grepl("execute:", yml_unset))
+})
+
 test_that("build_quarto_project_yaml() starts with the sandpaper sentinel", {
   yml <- sandpaper:::build_quarto_project_yaml()
   first_line <- strsplit(yml, "\n", fixed = TRUE)[[1]][1]
@@ -119,6 +130,31 @@ test_that("with_quarto_project() merged file preserves user keys and adds engine
 
   expect_true(any(grepl("bibliography: refs.bib", state$merged_during)))
   expect_true(any(grepl("engine: knitr", state$merged_during)))
+})
+
+test_that("merge_quarto_yaml() adds execute.error when absent from user file", {
+  user_lines <- c("project:", "  type: default", "bibliography: refs.bib")
+  merged <- sandpaper:::merge_quarto_yaml(user_lines,
+    execute_error = FALSE, quiet = TRUE)
+  expect_true(any(grepl("bibliography: refs.bib", merged, fixed = TRUE)))
+  # execute.error: false appears in the merged document
+  joined <- paste(merged, collapse = "\n")
+  expect_match(joined, "execute:\\s*\\n\\s*error: false")
+})
+
+test_that("merge_quarto_yaml() preserves a user-set execute.error", {
+  # The user has explicitly set execute.error: true. Sandpaper must
+  # respect that even if its fail_on_error config would imply false.
+  user_lines <- c(
+    "project:", "  type: default",
+    "execute:", "  error: true",
+    "bibliography: refs.bib"
+  )
+  merged <- sandpaper:::merge_quarto_yaml(user_lines,
+    execute_error = FALSE, quiet = TRUE)
+  joined <- paste(merged, collapse = "\n")
+  expect_match(joined, "execute:\\s*\\n\\s*error: true")
+  expect_false(grepl("error: false", joined, fixed = TRUE))
 })
 
 test_that("with_quarto_project() logs info when merging existing user file", {
