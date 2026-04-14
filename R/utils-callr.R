@@ -97,58 +97,10 @@ callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet,
   )
 
   # Post-process the rendered markdown to match what sandpaper expects.
+  # See R/utils-quarto-postprocess.R for the pure transforms applied.
   rendered <- file.path(dirname(path), paste0(slug, ".md"))
   lines <- readLines(rendered, encoding = "UTF-8")
-
-  # ::: {.questions} -> ::: questions
-  lines <- gsub("^(:{3,})\\s*\\{\\.([-a-zA-Z0-9]+)\\}\\s*$", "\\1 \\2", lines)
-  # \[text\]\[ref\] -> [text][ref]
-  lines <- gsub("\\\\\\[(.+?)\\\\\\]\\\\\\[(.+?)\\\\\\]", "[\\1][\\2]", lines)
-
-  # Convert GFM alert blockquotes to Carpentries fenced divs.
-  # Quarto renders callouts as > [!NOTE], > [!WARNING], etc.
-  callout_map <- c(
-    NOTE      = "callout",
-    TIP       = "callout",
-    WARNING   = "caution",
-    CAUTION   = "caution",
-    IMPORTANT = "caution"
-  )
-  out <- character(0)
-  in_alert <- FALSE
-  alert_class <- ""
-  for (line in lines) {
-    alert_match <- regmatches(line, regexec("^>\\s*\\[!(\\w+)\\]", line))[[1]]
-    if (length(alert_match) == 2 && !in_alert) {
-      alert_type <- alert_match[2]
-      alert_class <- callout_map[alert_type]
-      if (!is.na(alert_class)) {
-        in_alert <- TRUE
-        out <- c(out, paste(":::", alert_class))
-        next
-      }
-    }
-    if (in_alert) {
-      if (!grepl("^>", line) && nzchar(trimws(line))) {
-        # Non-blockquote, non-empty line: end of alert
-        in_alert <- FALSE
-        out <- c(out, ":::", "", line)
-      } else if (!grepl("^>", line) && !nzchar(trimws(line))) {
-        # Empty line after blockquote: end of alert
-        in_alert <- FALSE
-        out <- c(out, ":::", "")
-      } else {
-        # Strip the leading > and optional space
-        out <- c(out, sub("^>\\s?", "", line))
-      }
-    } else {
-      out <- c(out, line)
-    }
-  }
-  if (in_alert) {
-    out <- c(out, ":::")
-  }
-  lines <- out
+  lines <- postprocess_quarto_md(lines)
 
   # Move generated figures to fig/ with sandpaper naming convention, and
   # rewrite image paths in the markdown to match.

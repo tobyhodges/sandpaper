@@ -1,7 +1,11 @@
-# Tests for the post-processing applied to Quarto-rendered markdown.
-# These test the regex transformations without needing Quarto/jupyter.
+# Tests for post-processing applied to Quarto-rendered markdown.
+# These exercise the pure helpers in R/utils-quarto-postprocess.R so a
+# drift in the production logic is caught, rather than re-implementing
+# the transforms inside the test body.
 
-test_that("fenced div {.class} syntax is stripped", {
+# ---- strip_fenced_div_attrs() ----------------------------------------------
+
+test_that("strip_fenced_div_attrs() rewrites {.class} to bare class", {
   lines <- c(
     "::: {.questions}",
     "- A question?",
@@ -11,26 +15,70 @@ test_that("fenced div {.class} syntax is stripped", {
     "## Challenge",
     ":::::"
   )
-  result <- gsub("^(:{3,})\\s*\\{\\.([-a-zA-Z0-9]+)\\}\\s*$", "\\1 \\2", lines)
+  result <- sandpaper:::strip_fenced_div_attrs(lines)
   expect_equal(result[1], "::: questions")
   expect_equal(result[5], "::::: challenge")
-  # Closing divs unchanged
+  # Closing fences unchanged
   expect_equal(result[3], ":::")
+  expect_equal(result[7], ":::::")
 })
 
-test_that("escaped reference links are restored", {
+test_that("strip_fenced_div_attrs() leaves non-div lines alone", {
+  lines <- c("Some prose.", "::: {.unrelated}", "> [!NOTE]")
+  result <- sandpaper:::strip_fenced_div_attrs(lines)
+  expect_equal(result[1], "Some prose.")
+  expect_equal(result[2], "::: unrelated")
+  expect_equal(result[3], "> [!NOTE]")
+})
+
+# ---- unescape_reference_links() --------------------------------------------
+
+test_that("unescape_reference_links() restores escaped reference links", {
   lines <- c(
     "See the \\[documentation\\]\\[docs\\] for details.",
     "Also \\[this link\\]\\[other\\].",
     "Normal [link](https://example.com) is unchanged."
   )
-  result <- gsub("\\\\\\[(.+?)\\\\\\]\\\\\\[(.+?)\\\\\\]", "[\\1][\\2]", lines)
+  result <- sandpaper:::unescape_reference_links(lines)
   expect_equal(result[1], "See the [documentation][docs] for details.")
   expect_equal(result[2], "Also [this link][other].")
   expect_equal(result[3], "Normal [link](https://example.com) is unchanged.")
 })
 
-test_that("GFM alert blockquotes are converted to Carpentries divs", {
+test_that("unescape_reference_links() handles a realistic gfm fixture", {
+  # Canary against a realistic snippet produced by running Quarto's
+  # gfm+fenced_divs writer over a .qmd episode that contained a
+  # reference-style link definition and inline usage. If Quarto ever
+  # changes its escaping, this fixture catches the drift.
+  fixture <- c(
+    "## Introduction",
+    "",
+    "This lesson was created via The Carpentries Workbench\\[^1\\]. For",
+    "full documentation refer to the \\[Introduction to The Carpentries",
+    "Workbench\\]\\[carpentries-workbench\\].",
+    "",
+    "See also the \\[pandoc\\]\\[pandoc\\] and \\[r-markdown\\]\\[r-markdown\\]",
+    "references.",
+    "",
+    "  \\[carpentries-workbench\\]: https://carpentries.github.io/workbench/",
+    "  \\[pandoc\\]: https://pandoc.org/MANUAL.html",
+    "  \\[r-markdown\\]: https://rmarkdown.rstudio.com/"
+  )
+  result <- sandpaper:::unescape_reference_links(fixture)
+  # Inline references are rewritten
+  expect_true(any(grepl(
+    "[Introduction to The Carpentries",
+    result, fixed = TRUE
+  )))
+  expect_true(any(grepl("[pandoc][pandoc]", result, fixed = TRUE)))
+  expect_true(any(grepl("[r-markdown][r-markdown]", result, fixed = TRUE)))
+  # No escaped pairs remain in inline usage
+  expect_false(any(grepl("\\\\\\[.+?\\\\\\]\\\\\\[.+?\\\\\\]", result)))
+})
+
+# ---- convert_gfm_alerts_to_callouts() --------------------------------------
+
+test_that("convert_gfm_alerts_to_callouts() maps NOTE and WARNING", {
   lines <- c(
     "Some text.",
     "",
@@ -46,52 +94,79 @@ test_that("GFM alert blockquotes are converted to Carpentries divs", {
     "",
     "More text."
   )
+  out <- sandpaper:::convert_gfm_alerts_to_callouts(lines)
 
-  callout_map <- c(
-    NOTE = "callout", TIP = "callout",
-    WARNING = "caution", CAUTION = "caution", IMPORTANT = "caution"
-  )
-  out <- character(0)
-  in_alert <- FALSE
-  alert_class <- ""
-  for (line in lines) {
-    alert_match <- regmatches(line, regexec("^>\\s*\\[!(\\w+)\\]", line))[[1]]
-    if (length(alert_match) == 2 && !in_alert) {
-      alert_type <- alert_match[2]
-      alert_class <- callout_map[alert_type]
-      if (!is.na(alert_class)) {
-        in_alert <- TRUE
-        out <- c(out, paste(":::", alert_class))
-        next
-      }
-    }
-    if (in_alert) {
-      if (!grepl("^>", line) && nzchar(trimws(line))) {
-        in_alert <- FALSE
-        out <- c(out, ":::", "", line)
-      } else if (!grepl("^>", line) && !nzchar(trimws(line))) {
-        in_alert <- FALSE
-        out <- c(out, ":::", "")
-      } else {
-        out <- c(out, sub("^>\\s?", "", line))
-      }
-    } else {
-      out <- c(out, line)
-    }
-  }
-  if (in_alert) out <- c(out, ":::")
-
-  # NOTE becomes callout
   expect_true(any(grepl("^::: callout$", out)))
-  # WARNING becomes caution
   expect_true(any(grepl("^::: caution$", out)))
-  # No GFM alert syntax remaining
   expect_false(any(grepl("\\[!NOTE\\]", out)))
   expect_false(any(grepl("\\[!WARNING\\]", out)))
-  # Content is preserved
   expect_true(any(grepl("My Note", out)))
   expect_true(any(grepl("A warning without a title", out)))
-  # Surrounding text preserved
+  # Surrounding prose preserved
   expect_equal(out[1], "Some text.")
   expect_true(any(grepl("More text.", out)))
+})
+
+test_that("convert_gfm_alerts_to_callouts() closes an unterminated alert", {
+  lines <- c(
+    "> [!TIP]",
+    ">",
+    "> trailing alert at end of file"
+  )
+  out <- sandpaper:::convert_gfm_alerts_to_callouts(lines)
+  expect_equal(out[1], "::: callout")
+  expect_equal(out[length(out)], ":::")
+})
+
+test_that("convert_gfm_alerts_to_callouts() leaves unknown alert types alone", {
+  lines <- c("> [!WEIRD]", ">", "> something odd")
+  out <- sandpaper:::convert_gfm_alerts_to_callouts(lines)
+  # Unknown type is not rewritten to a callout fence
+  expect_false(any(grepl("^::: ", out)))
+  expect_true(any(grepl("\\[!WEIRD\\]", out)))
+})
+
+test_that("convert_gfm_alerts_to_callouts() unwraps a nested blockquote once", {
+  # A nested blockquote inside an alert is a rare pattern. The
+  # transform strips one level of `>` so the inner blockquote survives
+  # as a regular blockquote inside the callout. Deeper nesting would
+  # need a real parser; this test pins the documented single-level
+  # behaviour so regressions are visible.
+  lines <- c(
+    "> [!NOTE]",
+    ">",
+    "> A note containing a quotation:",
+    ">",
+    "> > quoted text",
+    ">",
+    "> resuming the note."
+  )
+  out <- sandpaper:::convert_gfm_alerts_to_callouts(lines)
+  expect_equal(out[1], "::: callout")
+  # Single-level unwrap: `> > quoted text` becomes `> quoted text`
+  expect_true(any(grepl("^> quoted text$", out)))
+  # Alert boundary is closed
+  expect_equal(out[length(out)], ":::")
+  # Prose around the nested quote is preserved
+  expect_true(any(grepl("A note containing a quotation", out)))
+  expect_true(any(grepl("resuming the note", out)))
+})
+
+# ---- postprocess_quarto_md() -----------------------------------------------
+
+test_that("postprocess_quarto_md() composes all three transforms", {
+  lines <- c(
+    "::: {.questions}",
+    "- See \\[docs\\]\\[docs\\].",
+    ":::",
+    "",
+    "> [!NOTE]",
+    ">",
+    "> Heads up."
+  )
+  result <- sandpaper:::postprocess_quarto_md(lines)
+  expect_equal(result[1], "::: questions")
+  expect_true(any(grepl("[docs][docs]", result, fixed = TRUE)))
+  expect_true(any(grepl("^::: callout$", result)))
+  expect_false(any(grepl("\\[!NOTE\\]", result)))
 })
