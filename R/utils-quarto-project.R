@@ -11,48 +11,13 @@
 
 sandpaper_sentinel <- "# sandpaper-managed transient Quarto project file (do not edit)"
 
-# Check whether the lesson has the shinylive Quarto extension installed.
-#
-# @param path the path to the lesson root
-# @return logical, TRUE if `_extensions/quarto-ext/shinylive/` exists
-# @keywords internal
-has_shinylive <- function(path) {
-  ext <- fs::path(root_path(path), "_extensions", "quarto-ext", "shinylive")
-  fs::dir_exists(ext)
-}
-
-# Scan all `.qmd` files in the lesson for executable code cell language
-# markers (`{python}`, `{r}`, `{julia}`). Shinylive cells (`{shinylive-r}`,
-# `{shinylive-python}`) are NOT counted because they are intercepted by the
-# shinylive Lua filter and never executed by the Quarto engine.
-#
-# @param path the path to the lesson root
-# @return a character vector of unique executable engine languages found
-# @keywords internal
-detect_qmd_executable_engines <- function(path) {
-  root <- root_path(path)
-  qmd_files <- fs::dir_ls(root, glob = "*.qmd", recurse = TRUE, fail = FALSE)
-  if (length(qmd_files) == 0) return(character())
-  langs <- character()
-  re <- "^[[:space:]]*```\\{([a-zA-Z][a-zA-Z0-9]*)[[:space:]}]"
-  for (f in qmd_files) {
-    lines <- tryCatch(readLines(f, warn = FALSE), error = function(e) character())
-    m <- regmatches(lines, regexec(re, lines))
-    for (match in m) {
-      if (length(match) == 2L) langs <- c(langs, match[2])
-    }
-  }
-  unique(langs)
-}
-
 # Build the YAML content string for a sandpaper-managed transient
 # `_quarto.yml`. Pure function — no filesystem side effects.
 #
-# @param shinylive logical, whether to include `filters: [shinylive]`
 # @param engine NULL or a string, e.g. "knitr" to force the engine
 # @return a single character string, the YAML document
 # @keywords internal
-build_quarto_project_yaml <- function(shinylive = FALSE, engine = NULL) {
+build_quarto_project_yaml <- function(engine = NULL) {
   lines <- c(
     sandpaper_sentinel,
     "# This file is written at the start of every build and removed on",
@@ -60,9 +25,6 @@ build_quarto_project_yaml <- function(shinylive = FALSE, engine = NULL) {
     "project:",
     "  type: default"
   )
-  if (isTRUE(shinylive)) {
-    lines <- c(lines, "filters:", "  - shinylive")
-  }
   if (!is.null(engine) && nzchar(engine)) {
     lines <- c(lines, paste0("engine: ", engine))
   }
@@ -90,13 +52,11 @@ is_sandpaper_quarto_yml <- function(yml_path) {
 # builds. Adds only missing keys; never clobbers user values.
 #
 # @param user_lines character vector, contents of the user's `_quarto.yml`
-# @param shinylive logical, whether to ensure `shinylive` is in `filters`
 # @param engine NULL or a string, forced `engine` key if not set by user
 # @param quiet if TRUE, suppress the "added keys" warning
 # @return a character vector of lines suitable for `writeLines()`
 # @keywords internal
-merge_quarto_yaml <- function(user_lines, shinylive = FALSE, engine = NULL,
-                              quiet = FALSE) {
+merge_quarto_yaml <- function(user_lines, engine = NULL, quiet = FALSE) {
   user_content <- paste(user_lines, collapse = "\n")
   user_data <- tryCatch(
     yaml::yaml.load(user_content, eval.expr = FALSE),
@@ -106,11 +66,9 @@ merge_quarto_yaml <- function(user_lines, shinylive = FALSE, engine = NULL,
 
   added <- character()
 
-  # Ensure project.type is set (required for shinylive to detect a Quarto
-  # project). `default` is used rather than `website` to preserve in-place
-  # rendering of .md outputs; `website` would redirect output to `_site/`
-  # which breaks sandpaper's expectation that the built .md lives next to
-  # its source.
+  # Ensure project.type is set. `default` is used rather than `website`
+  # because `website` redirects rendered output to `_site/`, which breaks
+  # sandpaper's expectation that the built .md lands next to its source.
   if (is.null(user_data$project)) {
     user_data$project <- list(type = "default")
     added <- c(added, "project.type")
@@ -119,19 +77,9 @@ merge_quarto_yaml <- function(user_lines, shinylive = FALSE, engine = NULL,
     added <- c(added, "project.type")
   }
 
-  if (isTRUE(shinylive)) {
-    existing_filters <- user_data$filters
-    if (is.null(existing_filters)) existing_filters <- list()
-    flat <- unlist(existing_filters)
-    if (!"shinylive" %in% flat) {
-      user_data$filters <- c(as.list(flat), list("shinylive"))
-      added <- c(added, "filters[shinylive]")
-    }
-  }
-
   if (!is.null(engine) && nzchar(engine) && is.null(user_data$engine)) {
     user_data$engine <- engine
-    added <- c(added, paste0("engine=", engine))
+    added <- c(added, "engine")
   }
 
   if (!quiet && length(added)) {
@@ -170,13 +118,11 @@ merge_quarto_yaml <- function(user_lines, shinylive = FALSE, engine = NULL,
 #
 # @param path path to the lesson root
 # @param expr an expression to evaluate while the transient file is present
-# @param shinylive logical, whether to include `filters: [shinylive]`
 # @param engine NULL or a string to force the engine
 # @param quiet if TRUE, suppress info messages
 # @return the value of `expr`
 # @keywords internal
-with_quarto_project <- function(path, expr, shinylive = FALSE, engine = NULL,
-                                quiet = FALSE) {
+with_quarto_project <- function(path, expr, engine = NULL, quiet = FALSE) {
   root <- root_path(path)
   yml <- fs::path(root, "_quarto.yml")
 
@@ -192,16 +138,12 @@ with_quarto_project <- function(path, expr, shinylive = FALSE, engine = NULL,
     backup <- fs::file_temp(pattern = "sandpaper-quarto-yml-", ext = "yml")
     fs::file_copy(yml, backup, overwrite = TRUE)
     user_lines <- readLines(yml, warn = FALSE)
-    merged <- merge_quarto_yaml(user_lines, shinylive = shinylive,
-      engine = engine, quiet = quiet)
+    merged <- merge_quarto_yaml(user_lines, engine = engine, quiet = quiet)
     writeLines(merged, yml)
   } else {
     # No user file, or an orphaned sandpaper file from a crashed build:
     # overwrite with freshly generated content.
-    writeLines(
-      build_quarto_project_yaml(shinylive = shinylive, engine = engine),
-      yml
-    )
+    writeLines(build_quarto_project_yaml(engine = engine), yml)
   }
 
   on.exit({

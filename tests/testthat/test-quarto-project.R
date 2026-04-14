@@ -11,11 +11,6 @@ test_that("build_quarto_project_yaml() generates a minimal default project", {
   expect_false(grepl("engine:", yml))
 })
 
-test_that("build_quarto_project_yaml() adds shinylive filter when requested", {
-  yml <- sandpaper:::build_quarto_project_yaml(shinylive = TRUE)
-  expect_match(yml, "filters:\\s*\\n\\s*- shinylive")
-})
-
 test_that("build_quarto_project_yaml() sets engine when requested", {
   yml <- sandpaper:::build_quarto_project_yaml(engine = "knitr")
   expect_match(yml, "engine: knitr")
@@ -25,90 +20,6 @@ test_that("build_quarto_project_yaml() starts with the sandpaper sentinel", {
   yml <- sandpaper:::build_quarto_project_yaml()
   first_line <- strsplit(yml, "\n", fixed = TRUE)[[1]][1]
   expect_identical(first_line, sandpaper:::sandpaper_sentinel)
-})
-
-# ---- has_shinylive() -------------------------------------------------------
-
-test_that("has_shinylive() returns FALSE when no extension present", {
-  tmp <- restore_fixture()
-  withr::defer(clear_globals())
-  expect_false(sandpaper:::has_shinylive(tmp))
-})
-
-test_that("has_shinylive() returns FALSE when _extensions/ has other extensions", {
-  tmp <- restore_fixture()
-  withr::defer(clear_globals())
-  fs::dir_create(fs::path(tmp, "_extensions", "some-other", "ext"))
-  expect_false(sandpaper:::has_shinylive(tmp))
-})
-
-test_that("has_shinylive() returns TRUE when shinylive extension present", {
-  tmp <- restore_fixture()
-  withr::defer(clear_globals())
-  fs::dir_create(fs::path(tmp, "_extensions", "quarto-ext", "shinylive"))
-  expect_true(sandpaper:::has_shinylive(tmp))
-})
-
-# ---- detect_qmd_executable_engines() ---------------------------------------
-
-test_that("detect_qmd_executable_engines() returns empty when no .qmd files", {
-  tmp <- restore_fixture()
-  withr::defer(clear_globals())
-  # Remove any .qmd that might be created by other tests
-  qmds <- fs::dir_ls(tmp, glob = "*.qmd", recurse = TRUE, fail = FALSE)
-  if (length(qmds)) fs::file_delete(qmds)
-  expect_length(sandpaper:::detect_qmd_executable_engines(tmp), 0)
-})
-
-test_that("detect_qmd_executable_engines() finds {python} and {r} cells", {
-  tmp <- restore_fixture()
-  withr::defer(clear_globals())
-  qmd <- fs::path(tmp, "episodes", "mixed.qmd")
-  writeLines(c(
-    "---", "title: Mixed", "---",
-    "",
-    "```{python}",
-    "print('hi')",
-    "```",
-    "",
-    "```{r}",
-    "x <- 1",
-    "```"
-  ), qmd)
-  engines <- sandpaper:::detect_qmd_executable_engines(tmp)
-  expect_setequal(engines, c("python", "r"))
-})
-
-test_that("detect_qmd_executable_engines() ignores shinylive cells", {
-  tmp <- restore_fixture()
-  withr::defer(clear_globals())
-  qmd <- fs::path(tmp, "episodes", "shinyonly.qmd")
-  writeLines(c(
-    "---", "title: Shinyonly", "---",
-    "",
-    "```{shinylive-python}",
-    "from shiny import App",
-    "```",
-    "",
-    "```{shinylive-r}",
-    "library(shiny)",
-    "```"
-  ), qmd)
-  engines <- sandpaper:::detect_qmd_executable_engines(tmp)
-  expect_false("python" %in% engines)
-  expect_false("r" %in% engines)
-  expect_false("shinylive-python" %in% engines)
-})
-
-test_that("detect_qmd_executable_engines() scans across multiple .qmd files", {
-  tmp <- restore_fixture()
-  withr::defer(clear_globals())
-  writeLines(c("---", "title: A", "---", "", "```{python}", "x", "```"),
-    fs::path(tmp, "episodes", "a.qmd"))
-  writeLines(c("---", "title: B", "---", "", "```{julia}", "y", "```"),
-    fs::path(tmp, "episodes", "b.qmd"))
-  engines <- sandpaper:::detect_qmd_executable_engines(tmp)
-  expect_setequal(engines, c("python", "julia"))
 })
 
 # ---- is_sandpaper_quarto_yml() ---------------------------------------------
@@ -194,20 +105,20 @@ test_that("with_quarto_project() respects and restores an existing user file", {
   expect_identical(readLines(yml), user_contents)
 })
 
-test_that("with_quarto_project() merged file includes user keys when shinylive requested", {
+test_that("with_quarto_project() merged file preserves user keys and adds engine", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
   yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
-  writeLines(c("project:", "  type: website", "bibliography: refs.bib"), yml)
+  writeLines(c("project:", "  type: default", "bibliography: refs.bib"), yml)
 
   state <- new.env()
   state$merged_during <- character()
   sandpaper:::with_quarto_project(tmp, {
     state$merged_during <- readLines(yml)
-  }, shinylive = TRUE, quiet = TRUE)
+  }, engine = "knitr", quiet = TRUE)
 
   expect_true(any(grepl("bibliography: refs.bib", state$merged_during)))
-  expect_true(any(grepl("shinylive", state$merged_during)))
+  expect_true(any(grepl("engine: knitr", state$merged_during)))
 })
 
 test_that("with_quarto_project() logs info when merging existing user file", {
