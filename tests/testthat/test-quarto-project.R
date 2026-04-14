@@ -92,7 +92,7 @@ test_that("with_quarto_project() respects and restores an existing user file", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
   yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
-  user_contents <- c("project:", "  type: website", "bibliography: refs.bib")
+  user_contents <- c("project:", "  type: default", "bibliography: refs.bib")
   writeLines(user_contents, yml)
 
   sandpaper:::with_quarto_project(tmp, {
@@ -125,12 +125,31 @@ test_that("with_quarto_project() logs info when merging existing user file", {
   tmp <- restore_fixture()
   withr::defer(clear_globals())
   yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
-  writeLines(c("project:", "  type: website"), yml)
+  writeLines(c("project:", "  type: default"), yml)
 
   expect_message(
     sandpaper:::with_quarto_project(tmp, NULL, quiet = FALSE),
     "Merging"
   )
+})
+
+test_that("with_quarto_project() aborts on output-redirecting project types", {
+  tmp <- restore_fixture()
+  withr::defer(clear_globals())
+  yml <- fs::path(sandpaper:::root_path(tmp), "_quarto.yml")
+
+  for (type in c("website", "book", "manuscript")) {
+    user_contents <- c("project:", paste0("  type: ", type),
+      "bibliography: refs.bib")
+    writeLines(user_contents, yml)
+
+    expect_error(
+      sandpaper:::with_quarto_project(tmp, NULL, quiet = TRUE),
+      paste0("project\\.type: ", type)
+    )
+    # User file is untouched after the abort.
+    expect_identical(readLines(yml), user_contents)
+  }
 })
 
 test_that("with_quarto_project() treats orphaned sandpaper file as absent", {

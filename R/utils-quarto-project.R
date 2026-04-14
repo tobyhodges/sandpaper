@@ -31,6 +31,36 @@ build_quarto_project_yaml <- function(engine = NULL) {
   paste(lines, collapse = "\n")
 }
 
+# Reject a user-authored `_quarto.yml` whose `project.type` redirects
+# rendered output to a subdirectory. Sandpaper expects the built `.md`
+# to land next to its source, so `website`, `book`, and `manuscript`
+# project types break the build. Abort up front with a clear message
+# rather than letting Quarto silently emit to a directory sandpaper
+# does not look in.
+#
+# @param user_lines character vector, contents of the user's `_quarto.yml`
+# @param yml_path path used only for the error message
+# @return invisible NULL on success, stops with `cli_abort` otherwise
+# @keywords internal
+check_user_quarto_project_compat <- function(user_lines, yml_path) {
+  user_data <- tryCatch(
+    yaml::yaml.load(paste(user_lines, collapse = "\n"), eval.expr = FALSE),
+    error = function(e) NULL
+  )
+  if (!is.list(user_data)) return(invisible())
+  project_type <- user_data$project$type
+  incompatible <- c("website", "book", "manuscript")
+  if (!is.null(project_type) && project_type %in% incompatible) {
+    cli::cli_abort(c(
+      "{.file {yml_path}} has {.code project.type: {project_type}}, which is incompatible with sandpaper.",
+      "i" = "Quarto's {.val {project_type}} project type redirects rendered output to a subdirectory.",
+      "i" = "Sandpaper needs the built {.file .md} to land next to its source.",
+      "x" = "Change it to {.code project.type: default} or remove the {.code project} key."
+    ))
+  }
+  invisible()
+}
+
 # Detect whether an existing `_quarto.yml` at the given path was written by
 # sandpaper (has the sentinel header). Orphaned files from a crashed build
 # are treated as absent and overwritten.
@@ -130,6 +160,9 @@ with_quarto_project <- function(path, expr, engine = NULL, quiet = FALSE) {
   backup <- NULL
 
   if (has_user_file) {
+    user_lines <- readLines(yml, warn = FALSE)
+    # Fails fast before we back up or touch anything on disk.
+    check_user_quarto_project_compat(user_lines, yml)
     if (!quiet) {
       cli::cli_alert_info(
         "Merging sandpaper Quarto project config into existing {.file _quarto.yml}"
@@ -137,7 +170,6 @@ with_quarto_project <- function(path, expr, engine = NULL, quiet = FALSE) {
     }
     backup <- fs::file_temp(pattern = "sandpaper-quarto-yml-", ext = "yml")
     fs::file_copy(yml, backup, overwrite = TRUE)
-    user_lines <- readLines(yml, warn = FALSE)
     merged <- merge_quarto_yaml(user_lines, engine = engine, quiet = quiet)
     writeLines(merged, yml)
   } else {
