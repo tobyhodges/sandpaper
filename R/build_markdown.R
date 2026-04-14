@@ -98,11 +98,12 @@ build_markdown <- function(path = ".", rebuild = FALSE, quiet = FALSE, slug = NU
         )
       }
     }
-    # Quarto requires a `_quarto.yml` at the project root for several of its
-    # features (extensions, filters, project-level metadata). When the build
-    # includes any .qmd source, wrap the build loop in a transient project
-    # file that is removed on completion. Shinylive-specific keys are added
-    # in a later step.
+    # Quarto walks up from each input file to find a `_quarto.yml` for
+    # project-level metadata and extension discovery. When the build
+    # includes any .qmd source, wrap the build loop in a transient
+    # project file so a user-authored `_quarto.yml` at the lesson root
+    # is merged and restored (or a generated one is created and removed
+    # on completion).
     has_qmd <- any(fs::path_ext(build_me) == "qmd")
     if (has_qmd) {
       with_quarto_project(path, build_the_episodes(), quiet = quiet)
