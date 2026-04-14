@@ -1,4 +1,4 @@
-# Tests for quarto installation checks
+# Tests for check_quarto_installed().
 
 test_that("check_quarto_installed() succeeds when quarto is available", {
   skip_if_not(
@@ -9,19 +9,24 @@ test_that("check_quarto_installed() succeeds when quarto is available", {
   expect_no_error(sandpaper:::check_quarto_installed())
 })
 
-test_that("check_quarto_installed() errors when package is missing", {
-  # Mock check_quarto_installed to simulate missing quarto package,
-  # verifying the error message pattern matches what the real function produces
-  local_mocked_bindings(
-    check_quarto_installed = function() {
-      cli::cli_abort(c(
-        "The {.pkg quarto} package is required to render {.file .qmd} files.",
-        "i" = "Install it with {.code install.packages('quarto')}"
-      ))
-    }
+test_that("check_quarto_installed() errors when the Quarto CLI is missing", {
+  # Exercise the real function on the CLI-missing branch by stubbing
+  # quarto::quarto_path() to return NULL. The requireNamespace() branch
+  # is not directly covered: simulating a missing quarto package
+  # in-process is unreliable, and a subprocess test would add a callr
+  # dependency for a single informational error message.
+  skip_if_not(
+    requireNamespace("quarto", quietly = TRUE),
+    "quarto R package not installed"
   )
-  expect_error(
-    check_quarto_installed(),
-    "quarto.*required"
+  testthat::with_mocked_bindings(
+    quarto_path = function() NULL,
+    {
+      expect_error(
+        sandpaper:::check_quarto_installed(),
+        "Quarto CLI"
+      )
+    },
+    .package = "quarto"
   )
 })
