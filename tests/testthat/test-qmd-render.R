@@ -76,3 +76,48 @@ test_that("build_markdown() renders a .qmd episode end-to-end", {
   content <- readLines(built_md)
   expect_true(any(grepl("The answer is 2", content)))
 })
+
+test_that("callr_build_episode_qmd() cleans up intermediates when post-processing fails", {
+  # If the render succeeds but a later step raises an error, the
+  # intermediate `<slug>.md` and `<slug>_files/` next to the source
+  # must not be left behind. An on.exit guard in
+  # callr_build_episode_qmd() handles this.
+  skip_if_not(nzchar(Sys.which("quarto")), "Quarto CLI not installed")
+  skip_if_not(
+    requireNamespace("quarto", quietly = TRUE),
+    "quarto R package not installed"
+  )
+
+  tmp <- withr::local_tempdir()
+  src_dir <- fs::path(tmp, "src")
+  out_dir <- fs::path(tmp, "out")
+  fs::dir_create(src_dir)
+  fs::dir_create(out_dir)
+
+  src <- fs::path(src_dir, "ok.qmd")
+  writeLines(c(
+    "---", "title: Simple", "engine: markdown", "---",
+    "",
+    "Hello."
+  ), src)
+  out <- fs::path(out_dir, "ok.md")
+
+  testthat::with_mocked_bindings(
+    postprocess_quarto_md = function(lines) stop("boom"),
+    {
+      expect_error(
+        sandpaper:::callr_build_episode_qmd(
+          path = src, outpath = out, workdir = src_dir,
+          lua_filter = NULL, quiet = TRUE
+        ),
+        "boom"
+      )
+    },
+    .package = "sandpaper"
+  )
+
+  # Source directory must be clean: neither the intermediate rendered
+  # markdown nor Quarto's figures directory should survive the failure.
+  expect_false(fs::file_exists(fs::path(src_dir, "ok.md")))
+  expect_false(fs::dir_exists(fs::path(src_dir, "ok_files")))
+})

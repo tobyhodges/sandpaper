@@ -88,6 +88,31 @@ callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet) {
   on.exit(setwd(wd), add = TRUE)
   setwd(workdir)
 
+  # Quarto emits `<slug>.md` and `<slug>_files/` next to the input .qmd.
+  # After a successful render, the code below copies figures to `fig/`
+  # and moves the rendered markdown to outpath, deleting both as it
+  # goes. If the render fails, or post-processing raises an error,
+  # those cleanup steps are skipped and the intermediates are left
+  # behind next to the source. Install an idempotent cleanup guard
+  # here so the source directory is never polluted by a failed build.
+  # Absolute paths so the guard survives the setwd dance above and
+  # the cwd restoration on exit.
+  source_dir <- normalizePath(dirname(path), mustWork = FALSE)
+  rendered <- file.path(source_dir, paste0(slug, ".md"))
+  fig_dir <- file.path(source_dir, paste0(slug, "_files"))
+  abs_outpath <- normalizePath(outpath, mustWork = FALSE)
+  on.exit({
+    # Never delete the final output if it happens to share the same
+    # path as the intermediate rendered file.
+    if (file.exists(rendered) &&
+        !identical(normalizePath(rendered, mustWork = FALSE), abs_outpath)) {
+      tryCatch(file.remove(rendered), error = function(e) NULL)
+    }
+    if (dir.exists(fig_dir)) {
+      tryCatch(unlink(fig_dir, recursive = TRUE), error = function(e) NULL)
+    }
+  }, add = TRUE)
+
   # Use gfm+fenced_divs to preserve Carpentries div structure, plus a Lua
   # filter to undo Quarto's proof/solution transformation.
   pandoc_args <- if (!is.null(lua_filter)) c("--lua-filter", lua_filter) else NULL
@@ -102,13 +127,11 @@ callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet) {
 
   # Post-process the rendered markdown to match what sandpaper expects.
   # See R/utils-quarto-postprocess.R for the pure transforms applied.
-  rendered <- file.path(dirname(path), paste0(slug, ".md"))
   lines <- readLines(rendered, encoding = "UTF-8")
   lines <- postprocess_quarto_md(lines)
 
   # Move generated figures to fig/ with sandpaper naming convention, and
   # rewrite image paths in the markdown to match.
-  fig_dir <- file.path(dirname(path), paste0(slug, "_files"))
   out_fig_dir <- file.path(dirname(outpath), "fig")
   if (dir.exists(fig_dir)) {
     if (!dir.exists(out_fig_dir)) dir.create(out_fig_dir, recursive = TRUE)
