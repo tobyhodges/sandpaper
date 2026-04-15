@@ -24,7 +24,7 @@ gfm_alert_callout_map <- c(
   TIP       = "callout",
   WARNING   = "caution",
   CAUTION   = "caution",
-  IMPORTANT = "caution"
+  IMPORTANT = "callout"
 )
 
 postprocess_quarto_md <- function(lines) {

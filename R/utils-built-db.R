@@ -307,8 +307,8 @@ build_status <- function(sources, db = "site/built/md5sum.txt", rebuild = FALSE,
   # calculate checksums -------------------------------------------------------
   checksums <- tools::md5sum(fs::path(root_path, sources))
   # if there are any RMD documents, we check for child documents
-  is_rmd <- tolower(fs::path_ext(sources)) %in% c("rmd", "qmd")
-  if (any(is_rmd)) {
+  is_executable <- tolower(fs::path_ext(sources)) %in% c("rmd", "qmd")
+  if (any(is_executable)) {
     children <- get_lineages(this_lesson(root_path))
   } else {
     children <- list()
