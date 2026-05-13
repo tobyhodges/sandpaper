@@ -15,7 +15,7 @@
         {{/current}}
     </div><!--/div.accordion-header-->
         {{#current}}{{#headings}}
-    <div id="flush-collapse{{pos}}" class="accordion-collapse collapse show" aria-labelledby="flush-heading{{pos}}" data-bs-parent="#accordionFlush{{pos}}">
+    <div id="flush-collapse{{pos}}" class="accordion-collapse collapse show" data-bs-parent="#accordionFlush{{pos}}">
       <div class="accordion-body">
         <ul>
           {{{headings}}}

@@ -581,7 +581,6 @@ challenge_block = function(el)
   return(challenge_train)
 end
 
-
 -- Deal with fenced divs
 handle_our_divs = function(el)
   -- Questions and Objectives should be grouped
