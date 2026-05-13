@@ -97,16 +97,21 @@ build_episode_html <- function(path_md, path_src = NULL,
   page_globals$metadata$update(c(nav_list, list(date = list(modified = date))))
   page_globals$learner$update(c(nav_list, list(
     body      = use_learner(nodes),
-    progress  = page_progress,
     updated   = date
   )))
+  if (!is.null(page_progress) && !is.na(page_progress)) {
+    page_globals$learner$update(c(nav_list, list(progress = as.character(page_progress))))
+  }
+
   nav_list$page_back <- as_html(nav_list$page_back, instructor = TRUE)
   nav_list$page_forward <- as_html(nav_list$page_forward, instructor = TRUE)
   page_globals$instructor$update(c(nav_list, list(
     body      = use_instructor(nodes),
-    progress  = page_progress,
     updated   = date
   )))
+  if (!is.null(page_progress) && !is.na(page_progress)) {
+    page_globals$instructor$update(c(nav_list, list(progress = as.character(page_progress))))
+  }
 
   build_html(template = "chapter", pkg = pkg, nodes = nodes,
     global_data = page_globals, path_md = path_md, quiet = quiet)

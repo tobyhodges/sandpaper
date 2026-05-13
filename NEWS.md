@@ -1,9 +1,19 @@
-# sandpaper 0.20.1.9000 []
+# sandpaper 0.20.1 [2026-04-15]
 
-## HOTFIXES
+## ACCESSIBILITY
+
+* Alongside a range of {varnish} accessibility updates, this version fixes the unintended 
+  removal of h1 elements in overview/aggregate pages, removes the aria-labelledby attribute 
+  from progress bars, and adjusts the aria-label on pandoc/downlit code blocks. Thanks to 
+  @josenino95 for all the WCAG issue reports!
+
+## FIXES
 
 * Use GITHUB_PAT, GITHUB_TOKEN for fetching JSON from GitHub API URLs when
-  updating workflows (@froggleston)
+  updating workflows to avoid rate limits (@froggleston)
+* Fix tab behaviour when parenthesis were used within tab admonition (reported @matthewfeickert,
+  fixed @astroDimitrios)
+* Do not fail when setup.md is empty, but warn instead (fixed @froggleston)
 
 
 # sandpaper 0.20.0 [2026-02-28]

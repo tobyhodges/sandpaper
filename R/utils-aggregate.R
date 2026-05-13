@@ -235,14 +235,18 @@ build_agg_page <- function(pkg, pages, title = NULL, slug = NULL, aggregate = "s
     learn_content <- get_content(agg$learner, content = "self::node()")
     xml2::xml_add_child(learn_content, "section", id = sid)
     learn_parent <- xml2::xml_child(learn_content, xml2::xml_length(learn_content))
-
     instruct_content <- get_content(agg$instructor, content = "self::node()")
     xml2::xml_add_child(instruct_content, "section", id = sid)
     instruct_parent <- xml2::xml_child(instruct_content, xml2::xml_length(instruct_content))
   }
-  # clean up any content that currently exists
-  xml2::xml_remove(xml2::xml_children(learn_parent))
-  xml2::xml_remove(xml2::xml_children(instruct_parent))
+
+  # clean up any content that currently exists, except the content title h1
+  learn_children <- xml2::xml_children(learn_parent)
+  learn_children <- learn_children[!grepl("h1", xml2::xml_name(learn_children))]
+  instruct_children <- xml2::xml_children(instruct_parent)
+  instruct_children <- instruct_children[!grepl("h1", xml2::xml_name(instruct_children))]
+  xml2::xml_remove(learn_children)
+  xml2::xml_remove(instruct_children)
 
   the_episodes <- .resources$get()[["episodes"]]
   the_slugs <- get_slug(the_episodes)
@@ -256,7 +260,7 @@ build_agg_page <- function(pkg, pages, title = NULL, slug = NULL, aggregate = "s
       ep_learn <- pages$learner[[name]]
       ep_instruct <- pages$instructor[[name]]
     }
-    
+
     # skip empty episodes content
     if (is.null(get_content(ep_learn))) {
       next
