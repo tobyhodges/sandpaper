@@ -152,6 +152,80 @@ test_that("convert_gfm_alerts_to_callouts() unwraps a nested blockquote once", {
   expect_true(any(grepl("resuming the note", out)))
 })
 
+# ---- read_qmd_frontmatter() ------------------------------------------------
+
+test_that("read_qmd_frontmatter() returns YAML body lines without delimiters", {
+  src <- withr::local_tempfile(fileext = ".qmd")
+  writeLines(c(
+    "---",
+    "title: 'Introduction'",
+    "teaching: 10",
+    "exercises: 2",
+    "---",
+    "",
+    "Body content here."
+  ), src)
+  yaml <- sandpaper:::read_qmd_frontmatter(src)
+  expect_equal(yaml, c(
+    "title: 'Introduction'",
+    "teaching: 10",
+    "exercises: 2"
+  ))
+})
+
+test_that("read_qmd_frontmatter() returns character(0) when no frontmatter", {
+  src <- withr::local_tempfile(fileext = ".qmd")
+  writeLines(c("# Just an H1", "", "No YAML here."), src)
+  expect_equal(sandpaper:::read_qmd_frontmatter(src), character(0))
+})
+
+test_that("read_qmd_frontmatter() returns character(0) on unclosed delimiter", {
+  src <- withr::local_tempfile(fileext = ".qmd")
+  writeLines(c("---", "title: 'unfinished'", "body without close"), src)
+  expect_equal(sandpaper:::read_qmd_frontmatter(src), character(0))
+})
+
+test_that("read_qmd_frontmatter() returns character(0) for empty frontmatter", {
+  src <- withr::local_tempfile(fileext = ".qmd")
+  writeLines(c("---", "---", "body"), src)
+  expect_equal(sandpaper:::read_qmd_frontmatter(src), character(0))
+})
+
+# ---- strip_leading_h1() ----------------------------------------------------
+
+test_that("strip_leading_h1() removes the first H1 and its trailing blank", {
+  lines <- c(
+    "# Quarto features stress test",
+    "",
+    "::: questions",
+    "- A question?",
+    ":::"
+  )
+  result <- sandpaper:::strip_leading_h1(lines)
+  expect_equal(result, c(
+    "::: questions",
+    "- A question?",
+    ":::"
+  ))
+})
+
+test_that("strip_leading_h1() handles a leading blank line before the H1", {
+  lines <- c("", "# Title", "", "Body.")
+  result <- sandpaper:::strip_leading_h1(lines)
+  expect_equal(result, c("", "Body."))
+})
+
+test_that("strip_leading_h1() leaves H2+ headings alone", {
+  lines <- c("## Section", "", "Body.")
+  result <- sandpaper:::strip_leading_h1(lines)
+  expect_equal(result, c("## Section", "", "Body."))
+})
+
+test_that("strip_leading_h1() is a no-op when there is no leading H1", {
+  lines <- c("Just prose.", "", "More prose.")
+  expect_equal(sandpaper:::strip_leading_h1(lines), lines)
+})
+
 # ---- postprocess_quarto_md() -----------------------------------------------
 
 test_that("postprocess_quarto_md() composes all three transforms", {
@@ -169,4 +243,38 @@ test_that("postprocess_quarto_md() composes all three transforms", {
   expect_true(any(grepl("[docs][docs]", result, fixed = TRUE)))
   expect_true(any(grepl("^::: callout$", result)))
   expect_false(any(grepl("\\[!NOTE\\]", result)))
+})
+
+test_that("postprocess_quarto_md() prepends source YAML and strips the title H1", {
+  # Quarto's gfm writer drops the source frontmatter and converts the
+  # `title:` field into a leading H1. The downstream sandpaper/pkgdown
+  # phase reads `title`, `teaching`, `exercises` etc. from a YAML
+  # header, so we reconstruct the header from the source .qmd and
+  # remove the redundant H1.
+  lines <- c(
+    "# Introduction",
+    "",
+    "::: {.questions}",
+    "- A question?",
+    ":::"
+  )
+  yaml <- c("title: 'Introduction'", "teaching: 10", "exercises: 2")
+  result <- sandpaper:::postprocess_quarto_md(lines, source_yaml = yaml)
+  expect_equal(result[1], "---")
+  expect_equal(result[2], "title: 'Introduction'")
+  expect_equal(result[3], "teaching: 10")
+  expect_equal(result[4], "exercises: 2")
+  expect_equal(result[5], "---")
+  expect_false(any(grepl("^# Introduction$", result)))
+  expect_true(any(grepl("^::: questions$", result)))
+})
+
+test_that("postprocess_quarto_md() with NULL source_yaml does not modify the head", {
+  # Backwards-compatible: when no YAML is supplied (legacy callers or
+  # the existing inline tests), the H1 stays and no frontmatter is
+  # added.
+  lines <- c("# Introduction", "", "Body.")
+  result <- sandpaper:::postprocess_quarto_md(lines, source_yaml = NULL)
+  expect_equal(result[1], "# Introduction")
+  expect_false(any(grepl("^---$", result)))
 })

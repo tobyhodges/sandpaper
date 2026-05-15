@@ -134,10 +134,43 @@ callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet) {
     }
     out
   }
-  postprocess_quarto_md <- function(lines) {
+  read_qmd_frontmatter <- function(p) {
+    fl <- readLines(p, encoding = "UTF-8", warn = FALSE)
+    if (length(fl) < 2L || !identical(trimws(fl[1]), "---")) {
+      return(character(0))
+    }
+    close_idx <- which(trimws(fl[-1]) == "---")
+    if (length(close_idx) == 0L) {
+      return(character(0))
+    }
+    end <- close_idx[1] + 1L
+    if (end <= 2L) {
+      return(character(0))
+    }
+    fl[2:(end - 1L)]
+  }
+  strip_leading_h1 <- function(lines) {
+    i <- 1L
+    while (i <= length(lines) && !nzchar(trimws(lines[i]))) {
+      i <- i + 1L
+    }
+    if (i > length(lines) || !grepl("^#\\s", lines[i])) {
+      return(lines)
+    }
+    out <- lines[-i]
+    if (i <= length(out) && !nzchar(trimws(out[i]))) {
+      out <- out[-i]
+    }
+    out
+  }
+  postprocess_quarto_md <- function(lines, source_yaml = NULL) {
     lines <- strip_fenced_div_attrs(lines)
     lines <- unescape_reference_links(lines)
     lines <- convert_gfm_alerts_to_callouts(lines)
+    if (!is.null(source_yaml) && length(source_yaml) > 0) {
+      lines <- strip_leading_h1(lines)
+      lines <- c("---", source_yaml, "---", "", lines)
+    }
     lines
   }
   slug <- file_path_sans_ext(basename(outpath))
@@ -186,8 +219,13 @@ callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet) {
   # Post-process the rendered markdown to match what sandpaper expects.
   # The transforms are defined inline above; see
   # R/utils-quarto-postprocess.R for the canonical copies and tests.
+  # Read the source .qmd's YAML frontmatter so postprocess can
+  # reconstruct it on the rendered output (Quarto's gfm writer drops
+  # it and the downstream pkgdown phase needs `title`, `teaching`,
+  # `exercises`, etc.).
+  source_yaml <- read_qmd_frontmatter(path)
   lines <- readLines(rendered, encoding = "UTF-8")
-  lines <- postprocess_quarto_md(lines)
+  lines <- postprocess_quarto_md(lines, source_yaml = source_yaml)
 
   # Move generated figures to fig/ with sandpaper naming convention, and
   # rewrite image paths in the markdown to match.
