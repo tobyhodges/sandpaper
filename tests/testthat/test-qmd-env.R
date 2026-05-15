@@ -94,6 +94,74 @@ test_that("quarto_callr_env() leaves unrelated env vars alone", {
   })
 })
 
+test_that("local_clean_lesson_env() is a no-op when no `.conda/` is present", {
+  tmp <- withr::local_tempdir()
+  before_path <- Sys.getenv("PATH")
+  inner <- function() sandpaper:::local_clean_lesson_env(tmp)
+  inner()
+  expect_equal(Sys.getenv("PATH"), before_path)
+})
+
+test_that("local_clean_lesson_env() is a no-op when `.conda/bin` is not on PATH", {
+  tmp <- withr::local_tempdir()
+  fs::dir_create(fs::path(tmp, ".conda", "bin"))
+  # Set a PATH that doesn't include the lesson's .conda/bin
+  withr::local_envvar(c(PATH = "/usr/local/bin:/usr/bin"))
+  before_path <- Sys.getenv("PATH")
+  inner <- function() sandpaper:::local_clean_lesson_env(tmp)
+  inner()
+  expect_equal(Sys.getenv("PATH"), before_path)
+})
+
+test_that("local_clean_lesson_env() strips the lesson's `.conda/bin` from PATH", {
+  tmp <- withr::local_tempdir()
+  conda_bin <- as.character(fs::path(tmp, ".conda", "bin"))
+  fs::dir_create(conda_bin)
+  polluted <- paste(conda_bin, "/usr/local/bin", sep = .Platform$path.sep)
+  withr::local_envvar(c(PATH = polluted))
+
+  inner <- function() {
+    sandpaper:::local_clean_lesson_env(tmp)
+    Sys.getenv("PATH")
+  }
+  path_during <- inner()
+  path_after <- Sys.getenv("PATH")
+
+  expect_false(grepl(conda_bin, path_during, fixed = TRUE))
+  # Confirm the scrub reverts when the calling frame exits.
+  expect_true(grepl(conda_bin, path_after, fixed = TRUE))
+})
+
+test_that("local_clean_lesson_env() unsets RSTUDIO_PANDOC pointing into lesson's `.conda/`", {
+  tmp <- withr::local_tempdir()
+  conda_dir <- as.character(fs::path(tmp, ".conda"))
+  conda_bin <- as.character(fs::path(conda_dir, "bin"))
+  fs::dir_create(conda_bin)
+  withr::local_envvar(c(RSTUDIO_PANDOC = conda_bin))
+
+  inner <- function() {
+    sandpaper:::local_clean_lesson_env(tmp)
+    Sys.getenv("RSTUDIO_PANDOC", unset = NA)
+  }
+  rp_during <- inner()
+  expect_true(is.na(rp_during))
+  # Restored on exit
+  expect_equal(Sys.getenv("RSTUDIO_PANDOC"), conda_bin)
+})
+
+test_that("local_clean_lesson_env() preserves RSTUDIO_PANDOC that points elsewhere", {
+  tmp <- withr::local_tempdir()
+  fs::dir_create(fs::path(tmp, ".conda", "bin"))
+  withr::local_envvar(c(RSTUDIO_PANDOC = "/Applications/quarto/bin/tools/aarch64"))
+
+  inner <- function() {
+    sandpaper:::local_clean_lesson_env(tmp)
+    Sys.getenv("RSTUDIO_PANDOC", unset = NA)
+  }
+  rp_during <- inner()
+  expect_equal(rp_during, "/Applications/quarto/bin/tools/aarch64")
+})
+
 test_that("setup_quarto_env() detects environment.yml changes", {
   skip_if(is.null(sandpaper:::find_conda()), "conda/mamba not available")
   tmp <- restore_fixture()

@@ -16,6 +16,11 @@ build_site <- function(path = ".", quiet = !interactive(), preview = TRUE, overr
   # Because this can be run independently of build_lesson(), we need to check
   # that pandoc exists and to provision the global lesson components if they do
   # not yet exist.
+  #
+  # First strip any lesson-local `.conda/bin` from `PATH` (and unset a
+  # `RSTUDIO_PANDOC` that points into it) so pandoc lookup doesn't latch
+  # onto a pruned conda env that no longer ships pandoc.
+  local_clean_lesson_env(path)
   check_pandoc(quiet)
   lsn <- this_lesson(path)
   not_overview <- !(lsn$overview && length(lsn$episodes) == 0L)

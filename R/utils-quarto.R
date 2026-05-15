@@ -126,6 +126,80 @@ quarto_callr_env <- function(python_path = NULL) {
   c(callr::rcmd_safe_env(), unset, set)
 }
 
+# Strip the lesson's `.conda/bin` from `PATH` (and unset
+# `RSTUDIO_PANDOC` if it points into that conda env) for the
+# duration of the caller's frame.
+#
+# sandpaper provisions a lesson-local conda env at `.conda/` for
+# Quarto's Python execution. That env can leave `.conda/bin` on
+# `PATH` (via `conda activate`) even when nothing inside it
+# satisfies the build's needs. The qmd execution callr subprocess
+# already uses `quarto_callr_env()` to isolate itself, but
+# `build_site()` runs in the main R process where pkgdown and
+# rmarkdown resolve pandoc via `Sys.which()` / `RSTUDIO_PANDOC`.
+# A pruned or pandoc-less conda env then steals the lookup and
+# the build fails with "No such file or directory" against a
+# non-existent `.conda/bin/pandoc`.
+#
+# This helper scrubs only the *lesson's* `.conda/bin` (matched
+# exactly), so unrelated entries on `PATH` are untouched. It
+# also resets rmarkdown's cached pandoc location so subsequent
+# lookups see the cleaned env. Both changes are scoped to the
+# caller's frame via `withr::local_envvar()` — when the caller
+# returns, `PATH` and `RSTUDIO_PANDOC` are restored and the
+# pandoc cache is refreshed against the restored env.
+#
+# @param lesson_path the lesson root
+# @keywords internal
+local_clean_lesson_env <- function(lesson_path, .local_envir = parent.frame()) {
+  conda_dir <- as.character(fs::path(lesson_path, ".conda"))
+  conda_bin <- as.character(fs::path(conda_dir, "bin"))
+  if (!fs::dir_exists(conda_bin)) {
+    return(invisible())
+  }
+
+  current_path <- Sys.getenv("PATH")
+  segments <- strsplit(current_path, .Platform$path.sep, fixed = TRUE)[[1]]
+  cleaned_segments <- segments[segments != conda_bin]
+  path_changed <- length(cleaned_segments) != length(segments)
+
+  rstudio_pandoc <- Sys.getenv("RSTUDIO_PANDOC", unset = NA)
+  pandoc_env_changed <- !is.na(rstudio_pandoc) &&
+    startsWith(rstudio_pandoc, conda_dir)
+
+  if (!path_changed && !pandoc_env_changed) {
+    return(invisible())
+  }
+
+  # Register the cache-reset defer FIRST so it runs LAST (LIFO),
+  # after `withr::local_envvar()` has restored the env on exit.
+  withr::defer(
+    {
+      if (requireNamespace("rmarkdown", quietly = TRUE)) {
+        suppressMessages(rmarkdown::find_pandoc(cache = FALSE))
+      }
+    },
+    envir = .local_envir
+  )
+
+  if (path_changed) {
+    new_path <- paste(cleaned_segments, collapse = .Platform$path.sep)
+    withr::local_envvar(c(PATH = new_path), .local_envir = .local_envir)
+  }
+  if (pandoc_env_changed) {
+    withr::local_envvar(c(RSTUDIO_PANDOC = NA_character_),
+      .local_envir = .local_envir)
+  }
+
+  # Apply the cache reset now too so the cleaned env takes
+  # effect immediately within the caller's frame.
+  if (requireNamespace("rmarkdown", quietly = TRUE)) {
+    suppressMessages(rmarkdown::find_pandoc(cache = FALSE))
+  }
+
+  invisible()
+}
+
 check_quarto_installed <- function() {
   if (!requireNamespace("quarto", quietly = TRUE)) {
     cli::cli_abort(c(
