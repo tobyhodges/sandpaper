@@ -88,6 +88,44 @@ setup_quarto_env <- function(path, quiet = FALSE) {
   python_path
 }
 
+# Build the env var list for the qmd callr subprocess.
+#
+# Conda-forge's `quarto` package sets a family of `QUARTO_*`,
+# `DENO_*`, and `TYPST_*` env vars from its
+# `etc/conda/activate.d/*.sh` scripts. Removing the package (or
+# pruning the env) deletes the scripts but does not unset the
+# vars from any shell that was already activated. Stale vars
+# pointing at deleted paths can silently deadlock the Quarto CLI:
+# notably `QUARTO_DENO_DOM` pointing at a path from the
+# conda-forge build server that never existed locally, where
+# Quarto parks on a recvfrom waiting for an FFI plugin that will
+# never load. Scrub every such inherited var before invoking
+# Quarto, then re-set `QUARTO_PYTHON` to the conda env's Python
+# when one is available.
+#
+# @param python_path NULL or a path to the python binary in a
+#   conda env (typically the value returned by `setup_quarto_env()`)
+# @return a named character vector suitable for `callr::r(env = ...)`
+# @keywords internal
+quarto_callr_env <- function(python_path = NULL) {
+  inherited <- grep("^(QUARTO_|DENO_|TYPST_)",
+    names(Sys.getenv()), value = TRUE)
+  if (!is.null(python_path)) {
+    inherited <- setdiff(inherited, "QUARTO_PYTHON")
+  }
+  unset <- if (length(inherited)) {
+    stats::setNames(rep(NA_character_, length(inherited)), inherited)
+  } else {
+    character()
+  }
+  set <- if (!is.null(python_path)) {
+    c(QUARTO_PYTHON = python_path)
+  } else {
+    character()
+  }
+  c(callr::rcmd_safe_env(), unset, set)
+}
+
 check_quarto_installed <- function() {
   if (!requireNamespace("quarto", quietly = TRUE)) {
     cli::cli_abort(c(

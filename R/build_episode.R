@@ -235,15 +235,16 @@ build_episode_md <- function(path, hash = NULL, outdir = path_built(path),
       quiet      = quiet
     )
     sho <- !(quiet || identical(Sys.getenv("TESTTHAT"), "true"))
-    # If a conda environment exists, point Quarto at its Python
+    # If a conda environment exists, point Quarto at its Python.
+    # quarto_callr_env() also scrubs any conflicting QUARTO_*,
+    # DENO_*, and TYPST_* vars inherited from the parent shell.
     python_path <- setup_quarto_env(root_path(path), quiet = quiet)
-    env <- if (!is.null(python_path)) c("QUARTO_PYTHON" = python_path) else character()
     callr::r(
       func = callr_build_episode_qmd,
       args = args,
       show = !quiet,
       spinner = sho,
-      env = c(callr::rcmd_safe_env(), env)
+      env = quarto_callr_env(python_path)
     )
     return(invisible(outpath))
   }
