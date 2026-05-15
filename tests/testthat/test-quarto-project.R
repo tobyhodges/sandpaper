@@ -18,24 +18,13 @@ test_that("build_quarto_project_yaml() sets engine when requested", {
 
 test_that("build_quarto_project_yaml() emits execute.error when requested", {
   yml_permissive <- sandpaper:::build_quarto_project_yaml(execute_error = TRUE)
-  expect_match(yml_permissive, "error: true")
+  expect_match(yml_permissive, "execute:\\s*\\n\\s*error: true")
 
   yml_strict <- sandpaper:::build_quarto_project_yaml(execute_error = FALSE)
-  expect_match(yml_strict, "error: false")
+  expect_match(yml_strict, "execute:\\s*\\n\\s*error: false")
 
   yml_unset <- sandpaper:::build_quarto_project_yaml()
-  expect_false(grepl("error:", yml_unset))
-})
-
-test_that("build_quarto_project_yaml() always emits execute.daemon: false", {
-  # Disabling the kernel daemon prevents Quarto from wedging on a dead
-  # kernel socket between renders. See build_quarto_project_yaml() docs.
-  yml_default <- sandpaper:::build_quarto_project_yaml()
-  expect_match(yml_default, "execute:\\s*\\n\\s*daemon: false")
-
-  yml_with_error <- sandpaper:::build_quarto_project_yaml(execute_error = TRUE)
-  expect_match(yml_with_error, "daemon: false")
-  expect_match(yml_with_error, "error: true")
+  expect_false(grepl("execute:", yml_unset))
 })
 
 test_that("build_quarto_project_yaml() starts with the sandpaper sentinel", {
@@ -148,8 +137,9 @@ test_that("merge_quarto_yaml() adds execute.error when absent from user file", {
   merged <- sandpaper:::merge_quarto_yaml(user_lines,
     execute_error = FALSE, quiet = TRUE)
   expect_true(any(grepl("bibliography: refs.bib", merged, fixed = TRUE)))
+  # execute.error: false appears in the merged document
   joined <- paste(merged, collapse = "\n")
-  expect_match(joined, "error: false")
+  expect_match(joined, "execute:\\s*\\n\\s*error: false")
 })
 
 test_that("merge_quarto_yaml() preserves a user-set execute.error", {
@@ -163,42 +153,8 @@ test_that("merge_quarto_yaml() preserves a user-set execute.error", {
   merged <- sandpaper:::merge_quarto_yaml(user_lines,
     execute_error = FALSE, quiet = TRUE)
   joined <- paste(merged, collapse = "\n")
-  expect_match(joined, "error: true")
+  expect_match(joined, "execute:\\s*\\n\\s*error: true")
   expect_false(grepl("error: false", joined, fixed = TRUE))
-})
-
-test_that("merge_quarto_yaml() adds execute.daemon: false when absent", {
-  user_lines <- c("project:", "  type: default", "bibliography: refs.bib")
-  merged <- sandpaper:::merge_quarto_yaml(user_lines, quiet = TRUE)
-  joined <- paste(merged, collapse = "\n")
-  expect_match(joined, "daemon: false")
-})
-
-test_that("merge_quarto_yaml() preserves a user-set execute.daemon", {
-  # Author has explicitly opted into the persistent kernel daemon.
-  # Sandpaper must respect that even though its default is to disable it.
-  user_lines <- c(
-    "project:", "  type: default",
-    "execute:", "  daemon: true",
-    "bibliography: refs.bib"
-  )
-  merged <- sandpaper:::merge_quarto_yaml(user_lines, quiet = TRUE)
-  joined <- paste(merged, collapse = "\n")
-  expect_match(joined, "daemon: true")
-  expect_false(grepl("daemon: false", joined, fixed = TRUE))
-})
-
-test_that("merge_quarto_yaml() adds daemon alongside a user-set execute.error", {
-  # User set execute.error but not execute.daemon. Sandpaper should
-  # leave the error value alone and still add daemon: false.
-  user_lines <- c(
-    "project:", "  type: default",
-    "execute:", "  error: true"
-  )
-  merged <- sandpaper:::merge_quarto_yaml(user_lines, quiet = TRUE)
-  joined <- paste(merged, collapse = "\n")
-  expect_match(joined, "error: true")
-  expect_match(joined, "daemon: false")
 })
 
 test_that("with_quarto_project() logs info when merging existing user file", {
