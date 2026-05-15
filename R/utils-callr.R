@@ -79,8 +79,66 @@ callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet) {
   # `_quarto.yml` written by with_quarto_project(), so this function
   # does not need a per-episode `error` argument the way the .Rmd path
   # does for knitr::opts_chunk$set(error=).
+  #
+  # This body runs in a fresh callr subprocess where sandpaper's
+  # namespace is not loaded, so any helpers referenced below must be
+  # defined inline (see callr_build_episode_md for the same pattern).
+  # The canonical copies of these post-processing transforms live in
+  # R/utils-quarto-postprocess.R and are unit-tested there; keep the
+  # two in sync if either changes.
   file_path_sans_ext <- function(x) {
     sub("([^.]+)\\.[[:alnum:]]+$", "\\1", x)
+  }
+  gfm_alert_callout_map <- c(
+    NOTE      = "callout",
+    TIP       = "callout",
+    WARNING   = "caution",
+    CAUTION   = "caution",
+    IMPORTANT = "callout"
+  )
+  strip_fenced_div_attrs <- function(lines) {
+    gsub("^(:{3,})\\s*\\{\\.([-a-zA-Z0-9]+)\\}\\s*$", "\\1 \\2", lines)
+  }
+  unescape_reference_links <- function(lines) {
+    gsub("\\\\\\[(.+?)\\\\\\]\\\\\\[(.+?)\\\\\\]", "[\\1][\\2]", lines)
+  }
+  convert_gfm_alerts_to_callouts <- function(lines) {
+    out <- character(0)
+    in_alert <- FALSE
+    for (line in lines) {
+      alert_match <- regmatches(line, regexec("^>\\s*\\[!(\\w+)\\]", line))[[1]]
+      if (length(alert_match) == 2 && !in_alert) {
+        alert_class <- gfm_alert_callout_map[alert_match[2]]
+        if (!is.na(alert_class)) {
+          in_alert <- TRUE
+          out <- c(out, paste(":::", alert_class))
+          next
+        }
+      }
+      if (in_alert) {
+        if (!grepl("^>", line) && nzchar(trimws(line))) {
+          in_alert <- FALSE
+          out <- c(out, ":::", "", line)
+        } else if (!grepl("^>", line) && !nzchar(trimws(line))) {
+          in_alert <- FALSE
+          out <- c(out, ":::", "")
+        } else {
+          out <- c(out, sub("^>\\s?", "", line))
+        }
+      } else {
+        out <- c(out, line)
+      }
+    }
+    if (in_alert) {
+      out <- c(out, ":::")
+    }
+    out
+  }
+  postprocess_quarto_md <- function(lines) {
+    lines <- strip_fenced_div_attrs(lines)
+    lines <- unescape_reference_links(lines)
+    lines <- convert_gfm_alerts_to_callouts(lines)
+    lines
   }
   slug <- file_path_sans_ext(basename(outpath))
 
@@ -126,7 +184,8 @@ callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet) {
   )
 
   # Post-process the rendered markdown to match what sandpaper expects.
-  # See R/utils-quarto-postprocess.R for the pure transforms applied.
+  # The transforms are defined inline above; see
+  # R/utils-quarto-postprocess.R for the canonical copies and tests.
   lines <- readLines(rendered, encoding = "UTF-8")
   lines <- postprocess_quarto_md(lines)
 

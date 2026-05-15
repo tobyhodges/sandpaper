@@ -77,12 +77,13 @@ test_that("build_markdown() renders a .qmd episode end-to-end", {
   expect_true(any(grepl("The answer is 2", content)))
 })
 
-test_that("callr_build_episode_qmd() cleans up intermediates when post-processing fails", {
-  # If the render succeeds but a later step raises an error, the
-  # intermediate `<slug>.md` and `<slug>_files/` next to the source
+test_that("callr_build_episode_qmd() cleans up intermediates when render fails", {
+  # If a render leaves intermediates next to the source but then a step
+  # raises an error, the intermediate `<slug>.md` and `<slug>_files/`
   # must not be left behind. An on.exit guard in
-  # callr_build_episode_qmd() handles this.
-  skip_if_not(nzchar(Sys.which("quarto")), "Quarto CLI not installed")
+  # callr_build_episode_qmd() handles this. We stub `quarto::quarto_render`
+  # so the mock both writes the intermediates and throws, simulating a
+  # render that failed partway through.
   skip_if_not(
     requireNamespace("quarto", quietly = TRUE),
     "quarto R package not installed"
@@ -103,7 +104,14 @@ test_that("callr_build_episode_qmd() cleans up intermediates when post-processin
   out <- fs::path(out_dir, "ok.md")
 
   testthat::with_mocked_bindings(
-    postprocess_quarto_md = function(lines) stop("boom"),
+    quarto_render = function(...) {
+      # Simulate a partial Quarto render: drop intermediates next to
+      # the source, then fail. The on.exit guard in
+      # callr_build_episode_qmd() should clean these up.
+      file.create(fs::path(src_dir, "ok.md"))
+      fs::dir_create(fs::path(src_dir, "ok_files"))
+      stop("boom")
+    },
     {
       expect_error(
         sandpaper:::callr_build_episode_qmd(
@@ -113,7 +121,7 @@ test_that("callr_build_episode_qmd() cleans up intermediates when post-processin
         "boom"
       )
     },
-    .package = "sandpaper"
+    .package = "quarto"
   )
 
   # Source directory must be clean: neither the intermediate rendered
