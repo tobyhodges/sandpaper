@@ -14,6 +14,14 @@ sandpaper_sentinel <- "# sandpaper-managed transient Quarto project file (do not
 # Build the YAML content string for a sandpaper-managed transient
 # `_quarto.yml`. Pure function — no filesystem side effects.
 #
+# `execute.daemon: false` is always emitted. Quarto's persistent kernel
+# daemon can wedge a render indefinitely when the daemon dies between
+# uses: the next render parks forever on a socket waiting for a kernel
+# that's already gone. Disabling the daemon makes every render spawn
+# a fresh kernel and tear it down cleanly. Authors can override by
+# setting `execute.daemon: true` in their own `_quarto.yml` (see
+# `merge_quarto_yaml()` precedence).
+#
 # @param engine NULL or a string, e.g. "knitr" to force the engine
 # @param execute_error NULL or a logical. When non-NULL, emit
 #   `execute.error: true/false` to control whether Quarto halts on a
@@ -33,8 +41,9 @@ build_quarto_project_yaml <- function(engine = NULL, execute_error = NULL) {
   if (!is.null(engine) && nzchar(engine)) {
     lines <- c(lines, paste0("engine: ", engine))
   }
+  lines <- c(lines, "execute:", "  daemon: false")
   if (!is.null(execute_error)) {
-    lines <- c(lines, "execute:",
+    lines <- c(lines,
       paste0("  error: ", if (isTRUE(execute_error)) "true" else "false"))
   }
   paste(lines, collapse = "\n")
@@ -90,6 +99,10 @@ is_sandpaper_quarto_yml <- function(yml_path) {
 # is distinguishable from both the user's original and from plain sandpaper
 # builds. Adds only missing keys; never clobbers user values.
 #
+# `execute.daemon: false` is added unconditionally when absent (see
+# `build_quarto_project_yaml()` for rationale). An author who deliberately
+# sets `execute.daemon: true` keeps that value.
+#
 # @param user_lines character vector, contents of the user's `_quarto.yml`
 # @param engine NULL or a string, forced `engine` key if not set by user
 # @param execute_error NULL or a logical. When non-NULL and the user
@@ -126,11 +139,18 @@ merge_quarto_yaml <- function(user_lines, engine = NULL, execute_error = NULL,
     added <- c(added, "engine")
   }
 
+  # See build_quarto_project_yaml() for why execute.daemon: false is always
+  # emitted. Author-set values win — only fill in when absent.
+  if (is.null(user_data$execute)) {
+    user_data$execute <- list(daemon = FALSE)
+    added <- c(added, "execute.daemon")
+  } else if (is.null(user_data$execute$daemon)) {
+    user_data$execute$daemon <- FALSE
+    added <- c(added, "execute.daemon")
+  }
+
   if (!is.null(execute_error)) {
-    if (is.null(user_data$execute)) {
-      user_data$execute <- list(error = isTRUE(execute_error))
-      added <- c(added, "execute.error")
-    } else if (is.null(user_data$execute$error)) {
+    if (is.null(user_data$execute$error)) {
       user_data$execute$error <- isTRUE(execute_error)
       added <- c(added, "execute.error")
     }
