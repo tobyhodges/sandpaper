@@ -152,6 +152,96 @@ test_that("convert_gfm_alerts_to_callouts() unwraps a nested blockquote once", {
   expect_true(any(grepl("resuming the note", out)))
 })
 
+# ---- strip_ansi_escapes() ---------------------------------------------------
+
+test_that("strip_ansi_escapes() removes IPython traceback color codes", {
+  # IPython renders error tracebacks with ANSI CSI sequences for
+  # terminal coloring. Quarto's gfm writer passes them through
+  # verbatim; browsers eat the `\x1b` and render the trailing
+  # `[31m`/`[0m` text as garbage. Strip them at the postprocess step.
+  lines <- c(
+    "\033[0;31m------------------------\033[0m",
+    "\033[0;31mZeroDivisionError\033[0m  Traceback (most recent call last)",
+    "Cell \033[0;32mIn[3], line 1\033[0m",
+    "\033[0;32m----> 1\033[0m \033[0;36m1\033[0m / \033[0;36m0\033[0m",
+    "",
+    "\033[0;31mZeroDivisionError\033[0m: division by zero"
+  )
+  result <- sandpaper:::strip_ansi_escapes(lines)
+  expect_equal(result[1], "------------------------")
+  expect_equal(result[2], "ZeroDivisionError  Traceback (most recent call last)")
+  expect_equal(result[3], "Cell In[3], line 1")
+  expect_equal(result[4], "----> 1 1 / 0")
+  expect_equal(result[6], "ZeroDivisionError: division by zero")
+  expect_false(any(grepl("\033", result, fixed = TRUE)))
+})
+
+test_that("strip_ansi_escapes() leaves bracketed text alone", {
+  # The transform must not eat literal `[text]` content such as
+  # reference-link labels or `[unknown div] foo` validator messages.
+  lines <- c(
+    "See [docs][ref] for details.",
+    "Status: [OK] all good.",
+    "An array: [1, 2, 3]"
+  )
+  expect_equal(sandpaper:::strip_ansi_escapes(lines), lines)
+})
+
+# ---- detect_unexecuted_fences() / normalize_unexecuted_code_fences() ------
+
+test_that("detect_unexecuted_fences() returns unique languages from `{lang}` fences", {
+  # When Quarto executes a cell, the rendered fence loses its curlies
+  # (` ```bash`). When Quarto cannot execute the cell (e.g. no jupyter
+  # kernel for that language), the source-style fence (` ```{bash}`)
+  # survives to the rendered .md. Detect those so we can warn the
+  # author and normalize the fence text.
+  lines <- c(
+    "``` {bash}",
+    "echo hi",
+    "```",
+    "",
+    "``` python",
+    "print('executed')",
+    "```",
+    "",
+    "```{julia}",
+    "1 + 1",
+    "```",
+    "",
+    "``` {bash}",
+    "echo again",
+    "```"
+  )
+  langs <- sandpaper:::detect_unexecuted_fences(lines)
+  expect_setequal(langs, c("bash", "julia"))
+})
+
+test_that("detect_unexecuted_fences() returns character(0) when all fences executed", {
+  lines <- c("``` python", "print('x')", "```")
+  expect_equal(sandpaper:::detect_unexecuted_fences(lines), character(0))
+})
+
+test_that("normalize_unexecuted_code_fences() strips curlies from surviving fences", {
+  lines <- c(
+    "``` {bash}",
+    "echo hi",
+    "```",
+    "",
+    "```{julia}",
+    "1 + 1",
+    "```",
+    "",
+    "``` python",
+    "print('untouched')",
+    "```"
+  )
+  result <- sandpaper:::normalize_unexecuted_code_fences(lines)
+  expect_equal(result[1], "```bash")
+  expect_equal(result[5], "```julia")
+  # Already-clean fences are unchanged
+  expect_equal(result[9], "``` python")
+})
+
 # ---- read_qmd_frontmatter() ------------------------------------------------
 
 test_that("read_qmd_frontmatter() returns YAML body lines without delimiters", {

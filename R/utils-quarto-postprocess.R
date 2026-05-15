@@ -36,11 +36,48 @@ postprocess_quarto_md <- function(lines, source_yaml = NULL) {
   lines <- strip_fenced_div_attrs(lines)
   lines <- unescape_reference_links(lines)
   lines <- convert_gfm_alerts_to_callouts(lines)
+  lines <- strip_ansi_escapes(lines)
+  lines <- normalize_unexecuted_code_fences(lines)
   if (!is.null(source_yaml) && length(source_yaml) > 0) {
     lines <- strip_leading_h1(lines)
     lines <- c("---", source_yaml, "---", "", lines)
   }
   lines
+}
+
+# Return the unique set of languages used in surviving ```{lang}
+# code fences in `lines`. These are cells Quarto could not execute
+# (typically because no jupyter kernel is registered for the language)
+# whose source-style fence was passed through to the rendered .md.
+detect_unexecuted_fences <- function(lines) {
+  matches <- regmatches(
+    lines,
+    regexec("^`{3,}\\s*\\{([-a-zA-Z0-9_]+)\\}\\s*$", lines)
+  )
+  langs <- vapply(
+    matches,
+    function(m) if (length(m) == 2L) m[2] else NA_character_,
+    character(1)
+  )
+  unique(langs[!is.na(langs)])
+}
+
+# Rewrite surviving ```{lang} fences as ```lang so the final HTML
+# shows a normal language-tagged code block. The cell still has no
+# output (the warning emitted by `detect_unexecuted_fences()` tells
+# the author it did not execute) but the fence info no longer
+# displays as garbage in the rendered page.
+normalize_unexecuted_code_fences <- function(lines) {
+  gsub("^(`{3,})\\s*\\{([-a-zA-Z0-9_]+)\\}\\s*$", "\\1\\2", lines)
+}
+
+# Strip ANSI CSI escape sequences (e.g. `\x1b[31m`, `\x1b[0m`) from
+# rendered output. IPython tracebacks embed these for terminal
+# coloring, and Quarto's gfm writer preserves them verbatim — the
+# resulting HTML loses the ESC character but renders the trailing
+# parameter bytes (e.g. `[31m`) as literal text.
+strip_ansi_escapes <- function(lines) {
+  gsub("\033\\[[0-9;]*[a-zA-Z]", "", lines)
 }
 
 # Read the YAML frontmatter from a .qmd source file as a character

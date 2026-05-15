@@ -163,10 +163,30 @@ callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet) {
     }
     out
   }
+  strip_ansi_escapes <- function(lines) {
+    gsub("\033\\[[0-9;]*[a-zA-Z]", "", lines)
+  }
+  detect_unexecuted_fences <- function(lines) {
+    matches <- regmatches(
+      lines,
+      regexec("^`{3,}\\s*\\{([-a-zA-Z0-9_]+)\\}\\s*$", lines)
+    )
+    langs <- vapply(
+      matches,
+      function(m) if (length(m) == 2L) m[2] else NA_character_,
+      character(1)
+    )
+    unique(langs[!is.na(langs)])
+  }
+  normalize_unexecuted_code_fences <- function(lines) {
+    gsub("^(`{3,})\\s*\\{([-a-zA-Z0-9_]+)\\}\\s*$", "\\1\\2", lines)
+  }
   postprocess_quarto_md <- function(lines, source_yaml = NULL) {
     lines <- strip_fenced_div_attrs(lines)
     lines <- unescape_reference_links(lines)
     lines <- convert_gfm_alerts_to_callouts(lines)
+    lines <- strip_ansi_escapes(lines)
+    lines <- normalize_unexecuted_code_fences(lines)
     if (!is.null(source_yaml) && length(source_yaml) > 0) {
       lines <- strip_leading_h1(lines)
       lines <- c("---", source_yaml, "---", "", lines)
@@ -225,6 +245,19 @@ callr_build_episode_qmd <- function(path, outpath, workdir, lua_filter, quiet) {
   # `exercises`, etc.).
   source_yaml <- read_qmd_frontmatter(path)
   lines <- readLines(rendered, encoding = "UTF-8")
+  # Warn (once per language) when Quarto could not execute a
+  # `{lang}` cell — surviving source-style fences mean the relevant
+  # jupyter kernel isn't installed in the lesson's conda env.
+  for (lang in detect_unexecuted_fences(lines)) {
+    message(sprintf(
+      paste(
+        "%s code chunk detected but not executed.",
+        "Add the appropriate jupyter kernel to your conda environment",
+        "to make this code chunk executable."
+      ),
+      lang
+    ))
+  }
   lines <- postprocess_quarto_md(lines, source_yaml = source_yaml)
 
   # Move generated figures to fig/ with sandpaper naming convention, and
